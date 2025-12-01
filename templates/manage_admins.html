@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Admins - oXCookie Manager</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            min-height: 100vh;
+            background: #0a0a0a;
+            background-image: 
+                radial-gradient(circle at 20% 50%, rgba(120, 119, 198, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(255, 119, 198, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 40% 20%, rgba(120, 219, 255, 0.1) 0%, transparent 50%);
+            padding: 20px;
+            position: relative;
+            overflow-x: hidden;
+        }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: move 20s linear infinite;
+            z-index: 0;
+        }
+        
+        @keyframes move {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(50px, 50px); }
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .glass-card {
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            color: white;
+            font-size: 28px;
+            font-weight: 700;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+            backdrop-filter: blur(10px);
+            color: white;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-primary {
+            background: rgba(120, 119, 198, 0.2);
+            border: 1px solid rgba(120, 119, 198, 0.4);
+        }
+        
+        .btn-primary:hover {
+            background: rgba(120, 119, 198, 0.3);
+            transform: translateY(-2px);
+        }
+        
+        .btn-success {
+            background: rgba(16, 185, 129, 0.2);
+            border: 1px solid rgba(16, 185, 129, 0.4);
+        }
+        
+        .btn-success:hover {
+            background: rgba(16, 185, 129, 0.3);
+        }
+        
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+        }
+        
+        .btn-danger:hover {
+            background: rgba(239, 68, 68, 0.3);
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 8px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: white;
+            font-size: 14px;
+            transition: all 0.3s;
+            backdrop-filter: blur(10px);
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            background: rgba(0, 0, 0, 0.4);
+            border-color: rgba(120, 119, 198, 0.4);
+            box-shadow: 0 0 0 3px rgba(120, 119, 198, 0.2);
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        .alert {
+            padding: 15px 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            display: none;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .alert.success {
+            background: rgba(16, 185, 129, 0.2);
+            color: #d1fae5;
+        }
+        
+        .alert.error {
+            background: rgba(239, 68, 68, 0.2);
+            color: #fee2e2;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        
+        th, td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+        
+        th {
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+        }
+        
+        .badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-block;
+        }
+        
+        .badge.super-admin {
+            background: rgba(120, 119, 198, 0.3);
+            color: #c4b5fd;
+        }
+        
+        .badge.admin {
+            background: rgba(16, 185, 129, 0.3);
+            color: #d1fae5;
+        }
+        
+        .badge.expired {
+            background: rgba(239, 68, 68, 0.3);
+            color: #fee2e2;
+        }
+        
+        .badge.active {
+            background: rgba(16, 185, 129, 0.3);
+            color: #d1fae5;
+        }
+        
+        .badge.suspended {
+            background: rgba(245, 158, 11, 0.3);
+            color: #fde68a;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+        }
+        
+        .modal-content {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(20px);
+            margin: 5% auto;
+            padding: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.7);
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .modal-header h2 {
+            color: white;
+            font-size: 24px;
+        }
+        
+        .close {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .close:hover {
+            color: white;
+        }
+        
+        .maintenance-section {
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        textarea {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: white;
+            font-size: 14px;
+            min-height: 100px;
+            resize: vertical;
+            font-family: inherit;
+        }
+        
+        textarea:focus {
+            outline: none;
+            background: rgba(0, 0, 0, 0.4);
+            border-color: rgba(120, 119, 198, 0.4);
+            box-shadow: 0 0 0 3px rgba(120, 119, 198, 0.2);
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            .container {
+                max-width: 100%;
+            }
+            
+            .glass-card {
+                padding: 20px;
+            }
+            
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+            
+            .header h1 {
+                font-size: 24px;
+            }
+            
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            table {
+                font-size: 12px;
+                display: block;
+                overflow-x: auto;
+            }
+            
+            th, td {
+                padding: 10px 8px;
+            }
+            
+            .modal-content {
+                width: 95%;
+                padding: 20px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 20px;
+            }
+            
+            .glass-card {
+                padding: 15px;
+            }
+            
+            table {
+                font-size: 11px;
+            }
+            
+            th, td {
+                padding: 8px 5px;
+            }
+            
+            .btn {
+                padding: 8px 12px;
+                font-size: 12px;
+            }
+            
+            .modal-content {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="glass-card header">
+            <h1>👥 Manage Admins</h1>
+            <a href="/" class="btn btn-primary">← Back to Dashboard</a>
+        </div>
+        
+        <div id="alert" class="alert"></div>
+        
+        <!-- Create New Admin -->
+        <div class="glass-card">
+            <h2 style="color: white; margin-bottom: 20px;">➕ Create New Admin</h2>
+            <form id="create-admin-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input type="text" id="new-username" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="new-password" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Subscription Duration (days)</label>
+                    <input type="number" id="subscription-days" value="30" min="1" required>
+                </div>
+                <button type="submit" class="btn btn-success">Create Admin</button>
+            </form>
+        </div>
+        
+        <!-- Admin List -->
+        <div class="glass-card">
+            <h2 style="color: white; margin-bottom: 20px;">📋 Admin Users</h2>
+            <div id="admins-list">
+                <p style="color: rgba(255,255,255,0.7); text-align: center; padding: 20px;">Loading admins...</p>
+            </div>
+        </div>
+        
+        <!-- Web URL Settings -->
+        <div class="glass-card maintenance-section">
+            <h2 style="color: white; margin-bottom: 20px;">🌐 Web URL Settings</h2>
+            <form id="web-url-form">
+                <div class="form-group">
+                    <label>Web Application URL</label>
+                    <input type="url" id="web-url" placeholder="http://localhost:5004 or https://yourdomain.com">
+                    <small style="color: rgba(255,255,255,0.6); font-size: 12px; display: block; margin-top: 5px;">This URL will be used in Telegram notification buttons to view session details</small>
+                </div>
+                <button type="submit" class="btn btn-success">Save Web URL</button>
+            </form>
+        </div>
+        
+        <!-- Extension URLs Settings -->
+        <div class="glass-card maintenance-section">
+            <h2 style="color: white; margin-bottom: 20px;">🔗 Extension URLs Settings</h2>
+            <form id="extension-urls-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Cookie-Editor Chrome URL</label>
+                        <input type="url" id="cookie-editor-chrome" placeholder="https://chrome.google.com/webstore/detail/...">
+                    </div>
+                    <div class="form-group">
+                        <label>Cookie-Editor Firefox URL</label>
+                        <input type="url" id="cookie-editor-firefox" placeholder="https://addons.mozilla.org/...">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>EditThisCookie Chrome URL</label>
+                        <input type="url" id="editthiscookie-chrome" placeholder="https://chrome.google.com/webstore/detail/...">
+                    </div>
+                    <div class="form-group">
+                        <label>EditThisCookie Firefox URL</label>
+                        <input type="url" id="editthiscookie-firefox" placeholder="https://addons.mozilla.org/...">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-success">Save Extension URLs</button>
+            </form>
+        </div>
+        
+        <!-- Support Settings -->
+        <div class="glass-card maintenance-section">
+            <h2 style="color: white; margin-bottom: 20px;">💬 Support Settings</h2>
+            <form id="support-form">
+                <div class="form-group">
+                    <label>Support Telegram Username</label>
+                    <input type="text" id="support-telegram" placeholder="@username (without @ symbol)">
+                    <small style="color: rgba(255,255,255,0.6); font-size: 12px; display: block; margin-top: 5px;">This will be shown to suspended/expired admins for support contact</small>
+                </div>
+                <button type="submit" class="btn btn-success">Save Support Settings</button>
+            </form>
+        </div>
+        
+        <!-- Maintenance Message -->
+        <div class="glass-card maintenance-section">
+            <h2 style="color: white; margin-bottom: 20px;">⚠️ Maintenance Message</h2>
+            <form id="maintenance-form">
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="maintenance-enabled" style="width: auto; margin-right: 10px;">
+                        Enable Maintenance Message
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>Message (shown to normal admins)</label>
+                    <textarea id="maintenance-message" placeholder="Enter maintenance or upcoming maintenance message..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-success">Save Maintenance Message</button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Update Subscription Modal -->
+    <div id="updateModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Update Subscription</h2>
+                <span class="close" onclick="closeModal()">&times;</span>
+            </div>
+            <div style="color: white;">
+                <div class="form-group">
+                    <label>Subscription Status</label>
+                    <select id="update-status" style="width: 100%; padding: 12px 16px; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; color: white; font-size: 14px;">
+                        <option value="active">Active</option>
+                        <option value="suspended">Suspended</option>
+                        <option value="expired">Expired</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Extend Subscription (days)</label>
+                    <input type="number" id="extend-days" value="30" min="1">
+                </div>
+                <button onclick="updateSubscription()" class="btn btn-success" style="width: 100%;">Update Subscription</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Suspended/Expired Admin Modal -->
+    <div id="statusModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="status-modal-title">Admin Status</h2>
+                <span class="close" onclick="closeStatusModal()">&times;</span>
+            </div>
+            <div style="color: white;">
+                <div id="status-modal-content">
+                    <!-- Content will be inserted here -->
+                </div>
+                <div style="margin-top: 20px;">
+                    <button onclick="openUpdateModalFromStatus()" class="btn btn-success" style="width: 100%;">Update Status</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let currentUsername = null;
+        
+        function showAlert(message, type) {
+            const alert = document.getElementById('alert');
+            alert.className = `alert ${type}`;
+            alert.textContent = message;
+            alert.style.display = 'block';
+            setTimeout(() => {
+                alert.style.display = 'none';
+            }, 5000);
+        }
+        
+        async function loadAdmins() {
+            try {
+                const response = await fetch('/api/admins');
+                const data = await response.json();
+                
+                const listDiv = document.getElementById('admins-list');
+                if (data.admins && data.admins.length > 0) {
+                    let html = '<table><thead><tr><th>Username</th><th>Role</th><th>Subscription Expires</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+                    
+                    data.admins.forEach(admin => {
+                        const isSuperAdmin = admin.role === 'super_admin';
+                        const expiresDate = admin.subscription_expires ? new Date(admin.subscription_expires) : null;
+                        const subscriptionStatus = admin.subscription_status || 'active';
+                        
+                        // Determine status badge based on subscription_status
+                        let statusBadge;
+                        if (subscriptionStatus === 'expired') {
+                            statusBadge = '<span class="badge expired">Expired</span>';
+                        } else if (subscriptionStatus === 'suspended') {
+                            statusBadge = '<span class="badge suspended">Suspended</span>';
+                        } else {
+                            // Check date if status is active
+                            const isExpired = expiresDate && expiresDate < new Date();
+                            statusBadge = isExpired ? '<span class="badge expired">Expired (Date)</span>' : '<span class="badge active">Active</span>';
+                        }
+                        
+                        const roleBadge = isSuperAdmin ? '<span class="badge super-admin">Super Admin</span>' : '<span class="badge admin">Admin</span>';
+                        const expiresText = expiresDate ? expiresDate.toLocaleDateString() : 'Never';
+                        
+                        html += `<tr>
+                            <td>${admin.username}</td>
+                            <td>${roleBadge}</td>
+                            <td>${expiresText}</td>
+                            <td>
+                                ${statusBadge}
+                                ${!isSuperAdmin ? `<select id="status-${admin.username}" onchange="updateStatus('${admin.username}')" style="margin-left: 10px; padding: 4px 8px; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; color: white; font-size: 12px;">
+                                    <option value="active" ${subscriptionStatus === 'active' ? 'selected' : ''}>Active</option>
+                                    <option value="suspended" ${subscriptionStatus === 'suspended' ? 'selected' : ''}>Suspended</option>
+                                    <option value="expired" ${subscriptionStatus === 'expired' ? 'selected' : ''}>Expired</option>
+                                </select>` : ''}
+                            </td>
+                            <td>`;
+                        
+                        if (!isSuperAdmin) {
+                            html += `<button onclick="openUpdateModal('${admin.username}')" class="btn btn-primary" style="padding: 8px 16px; margin-right: 10px;">Manage</button>`;
+                            if (subscriptionStatus === 'suspended' || subscriptionStatus === 'expired') {
+                                html += `<button onclick="openStatusModal('${admin.username}', '${subscriptionStatus}')" class="btn btn-primary" style="padding: 8px 16px; margin-right: 10px; background: rgba(245, 158, 11, 0.2); border-color: rgba(245, 158, 11, 0.4);">View Details</button>`;
+                            }
+                            html += `<button onclick="deleteAdmin('${admin.username}')" class="btn btn-danger" style="padding: 8px 16px;">Delete</button>`;
+                        } else {
+                            html += '<span style="color: rgba(255,255,255,0.5);">-</span>';
+                        }
+                        
+                        html += `</td></tr>`;
+                    });
+                    
+                    html += '</tbody></table>';
+                    listDiv.innerHTML = html;
+                } else {
+                    listDiv.innerHTML = '<p style="color: rgba(255,255,255,0.7); text-align: center; padding: 20px;">No admins found</p>';
+                }
+            } catch (error) {
+                showAlert('Error loading admins: ' + error.message, 'error');
+            }
+        }
+        
+        document.getElementById('create-admin-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('new-username').value;
+            const password = document.getElementById('new-password').value;
+            const subscriptionDays = parseInt(document.getElementById('subscription-days').value);
+            
+            try {
+                const response = await fetch('/api/admins', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, subscription_days: subscriptionDays })
+                });
+                
+                const result = await response.json();
+                if (response.ok) {
+                    showAlert('Admin created successfully!', 'success');
+                    document.getElementById('create-admin-form').reset();
+                    document.getElementById('subscription-days').value = 30;
+                    loadAdmins();
+                } else {
+                    showAlert(result.message || 'Error creating admin', 'error');
+                }
+            } catch (error) {
+                showAlert('Error creating admin: ' + error.message, 'error');
+            }
+        });
+        
+        let currentAdminData = null;
+        
+        function openUpdateModal(username) {
+            currentUsername = username;
+            // Load current admin data to populate modal
+            fetch('/api/admins')
+                .then(response => response.json())
+                .then(data => {
+                    const admin = data.admins.find(a => a.username === username);
+                    if (admin) {
+                        currentAdminData = admin;
+                        const statusSelect = document.getElementById('update-status');
+                        if (statusSelect) {
+                            statusSelect.value = admin.subscription_status || 'active';
+                        }
+                    }
+                });
+            document.getElementById('updateModal').style.display = 'block';
+        }
+        
+        function closeModal() {
+            document.getElementById('updateModal').style.display = 'none';
+            currentUsername = null;
+            currentAdminData = null;
+        }
+        
+        async function openStatusModal(username, status) {
+            currentUsername = username;
+            const modal = document.getElementById('statusModal');
+            const title = document.getElementById('status-modal-title');
+            const content = document.getElementById('status-modal-content');
+            
+            // Get support Telegram from config
+            let supportInfo = '';
+            try {
+                const response = await fetch('/api/config');
+                if (response.ok) {
+                    const config = await response.json();
+                    const supportTelegram = config.support_telegram;
+                    if (supportTelegram) {
+                        supportInfo = `<p style="margin-top: 15px; color: rgba(255,255,255,0.9);"><strong>Support Contact:</strong> <a href="https://t.me/${supportTelegram.replace('@', '')}" target="_blank" style="color: #60a5fa; text-decoration: none;">@${supportTelegram.replace('@', '')}</a></p>`;
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading support info:', error);
+            }
+            
+            if (status === 'suspended') {
+                title.textContent = '⚠️ Suspended Admin';
+                let supportButton = '';
+                if (supportInfo) {
+                    const supportTelegram = supportInfo.match(/@(\w+)/)?.[1];
+                    if (supportTelegram) {
+                        supportButton = `<a href="https://t.me/${supportTelegram}" target="_blank" class="btn btn-primary" style="width: 100%; margin-top: 15px; text-align: center; display: block; text-decoration: none;">💬 Contact Support on Telegram</a>`;
+                    }
+                }
+                content.innerHTML = `
+                    <p style="margin-bottom: 15px;">This admin account has been <strong style="color: #fbbf24;">suspended</strong>.</p>
+                    <p style="color: rgba(255,255,255,0.7); margin-bottom: 15px;">The admin cannot log in until the status is changed to "Active".</p>
+                    ${supportInfo}
+                    ${supportButton}
+                `;
+            } else if (status === 'expired') {
+                title.textContent = '⏰ Expired Subscription';
+                let supportButton = '';
+                if (supportInfo) {
+                    const supportTelegram = supportInfo.match(/@(\w+)/)?.[1];
+                    if (supportTelegram) {
+                        supportButton = `<a href="https://t.me/${supportTelegram}" target="_blank" class="btn btn-primary" style="width: 100%; margin-top: 15px; text-align: center; display: block; text-decoration: none;">💬 Contact Support on Telegram</a>`;
+                    }
+                }
+                content.innerHTML = `
+                    <p style="margin-bottom: 15px;">This admin's subscription has <strong style="color: #ef4444;">expired</strong>.</p>
+                    <p style="color: rgba(255,255,255,0.7); margin-bottom: 15px;">The admin cannot log in until the status is changed to "Active" or the subscription is extended.</p>
+                    ${supportInfo}
+                    ${supportButton}
+                `;
+            }
+            
+            modal.style.display = 'block';
+        }
+        
+        function closeStatusModal() {
+            document.getElementById('statusModal').style.display = 'none';
+            currentUsername = null;
+        }
+        
+        function openUpdateModalFromStatus() {
+            closeStatusModal();
+            if (currentUsername) {
+                openUpdateModal(currentUsername);
+            }
+        }
+        
+        async function updateSubscription() {
+            if (!currentUsername) return;
+            
+            const days = parseInt(document.getElementById('extend-days').value);
+            const status = document.getElementById('update-status').value;
+            
+            try {
+                const response = await fetch(`/api/admins/${currentUsername}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        subscription_days: days,
+                        subscription_status: status
+                    })
+                });
+                
+                const result = await response.json();
+                if (response.ok) {
+                    showAlert('Subscription updated successfully!', 'success');
+                    closeModal();
+                    loadAdmins();
+                } else {
+                    showAlert(result.message || 'Error updating subscription', 'error');
+                }
+            } catch (error) {
+                showAlert('Error updating subscription: ' + error.message, 'error');
+            }
+        }
+        
+        async function updateStatus(username) {
+            const selectElement = document.getElementById(`status-${username}`);
+            const newStatus = selectElement.value;
+            
+            try {
+                const response = await fetch(`/api/admins/${username}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ subscription_status: newStatus })
+                });
+                
+                const result = await response.json();
+                if (response.ok) {
+                    showAlert(`Subscription status updated to ${newStatus}!`, 'success');
+                    loadAdmins();
+                } else {
+                    showAlert(result.message || 'Error updating status', 'error');
+                    // Revert select to previous value
+                    loadAdmins();
+                }
+            } catch (error) {
+                showAlert('Error updating status: ' + error.message, 'error');
+                // Revert select to previous value
+                loadAdmins();
+            }
+        }
+        
+        async function deleteAdmin(username) {
+            if (!confirm(`Are you sure you want to delete admin "${username}"?`)) return;
+            
+            try {
+                const response = await fetch(`/api/admins/${username}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                if (response.ok) {
+                    showAlert('Admin deleted successfully!', 'success');
+                    loadAdmins();
+                } else {
+                    showAlert(result.message || 'Error deleting admin', 'error');
+                }
+            } catch (error) {
+                showAlert('Error deleting admin: ' + error.message, 'error');
+            }
+        }
+        
+        async function loadMaintenance() {
+            try {
+                const response = await fetch('/api/maintenance');
+                const data = await response.json();
+                
+                document.getElementById('maintenance-enabled').checked = data.enabled;
+                document.getElementById('maintenance-message').value = data.message || '';
+            } catch (error) {
+                console.error('Error loading maintenance:', error);
+            }
+        }
+        
+        async function loadWebUrl() {
+            try {
+                const response = await fetch('/api/config');
+                if (response.ok) {
+                    const config = await response.json();
+                    document.getElementById('web-url').value = config.web_url || 'http://localhost:5004';
+                }
+            } catch (error) {
+                console.error('Error loading web URL:', error);
+            }
+        }
+        
+        async function loadExtensionUrls() {
+            try {
+                const response = await fetch('/api/config');
+                if (response.ok) {
+                    const config = await response.json();
+                    document.getElementById('cookie-editor-chrome').value = config.cookie_editor_chrome_url || 'https://chrome.google.com/webstore/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm';
+                    document.getElementById('cookie-editor-firefox').value = config.cookie_editor_firefox_url || 'https://addons.mozilla.org/en-US/firefox/addon/cookie-editor/';
+                    document.getElementById('editthiscookie-chrome').value = config.editthiscookie_chrome_url || 'https://chrome.google.com/webstore/detail/editthiscookie/fngmhnnpilhplaeedifhccceomclgfbg';
+                    document.getElementById('editthiscookie-firefox').value = config.editthiscookie_firefox_url || 'https://addons.mozilla.org/en-US/firefox/addon/edit-this-cookie/';
+                }
+            } catch (error) {
+                console.error('Error loading extension URLs:', error);
+            }
+        }
+        
+        async function loadSupportSettings() {
+            try {
+                const response = await fetch('/api/config');
+                if (response.ok) {
+                    const config = await response.json();
+                    const supportTelegram = config.support_telegram || '';
+                    document.getElementById('support-telegram').value = supportTelegram.replace('@', '');
+                }
+            } catch (error) {
+                console.error('Error loading support settings:', error);
+            }
+        }
+        
+        document.getElementById('web-url-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const webUrl = document.getElementById('web-url').value.trim();
+            
+            try {
+                const response = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ web_url: webUrl })
+                });
+                
+                const result = await response.json();
+                if (response.ok) {
+                    showAlert('Web URL saved successfully!', 'success');
+                } else {
+                    showAlert(result.message || 'Error saving web URL', 'error');
+                }
+            } catch (error) {
+                showAlert('Error saving web URL: ' + error.message, 'error');
+            }
+        });
+        
+        document.getElementById('extension-urls-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const extensionUrls = {
+                cookie_editor_chrome_url: document.getElementById('cookie-editor-chrome').value.trim(),
+                cookie_editor_firefox_url: document.getElementById('cookie-editor-firefox').value.trim(),
+                editthiscookie_chrome_url: document.getElementById('editthiscookie-chrome').value.trim(),
+                editthiscookie_firefox_url: document.getElementById('editthiscookie-firefox').value.trim()
+            };
+            
+            try {
+                const response = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(extensionUrls)
+                });
+                
+                const result = await response.json();
+                if (response.ok) {
+                    showAlert('Extension URLs saved successfully!', 'success');
+                } else {
+                    showAlert(result.message || 'Error saving extension URLs', 'error');
+                }
+            } catch (error) {
+                showAlert('Error saving extension URLs: ' + error.message, 'error');
+            }
+        });
+        
+        document.getElementById('support-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            let supportTelegram = document.getElementById('support-telegram').value.trim();
+            // Remove @ if user included it
+            supportTelegram = supportTelegram.replace('@', '');
+            
+            try {
+                const response = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ support_telegram: supportTelegram })
+                });
+                
+                const result = await response.json();
+                if (response.ok) {
+                    showAlert(`Support settings saved! Support Telegram: @${supportTelegram}`, 'success');
+                    // Update the input to show the saved value
+                    document.getElementById('support-telegram').value = supportTelegram;
+                } else {
+                    showAlert(result.message || 'Error saving support settings', 'error');
+                }
+            } catch (error) {
+                showAlert('Error saving support settings: ' + error.message, 'error');
+            }
+        });
+        
+        document.getElementById('maintenance-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const message = document.getElementById('maintenance-message').value;
+            const enabled = document.getElementById('maintenance-enabled').checked;
+            
+            try {
+                const response = await fetch('/api/maintenance', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message, enabled })
+                });
+                
+                const result = await response.json();
+                if (response.ok) {
+                    showAlert('Maintenance message updated!', 'success');
+                } else {
+                    showAlert(result.message || 'Error updating maintenance message', 'error');
+                }
+            } catch (error) {
+                showAlert('Error updating maintenance message: ' + error.message, 'error');
+            }
+        });
+        
+        window.onclick = function(event) {
+            const updateModal = document.getElementById('updateModal');
+            const statusModal = document.getElementById('statusModal');
+            if (event.target == updateModal) {
+                closeModal();
+            }
+            if (event.target == statusModal) {
+                closeStatusModal();
+            }
+        }
+        
+        // Initialize
+        loadAdmins();
+        loadMaintenance();
+        loadWebUrl();
+        loadExtensionUrls();
+        loadSupportSettings();
+    </script>
+</body>
+</html>
+
