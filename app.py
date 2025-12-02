@@ -19,6 +19,12 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from notifications import send_telegram_notification, send_discord_notification, send_email_notification
 from database_reader import read_latest_session, get_all_sessions
 from session_processor import create_txt_file, format_session_message, process_all_tokens
+from admin_db import (
+    get_user_by_username, get_all_users, create_user, update_user_subscription,
+    update_user_ip_whitelist, update_user_ip_access, delete_user, get_locked_accounts,
+    migrate_from_json
+)
+import json
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -107,58 +113,16 @@ def save_config(config):
         print(f"Error saving config: {e}")
         return False
 
+# Legacy functions for backward compatibility (now use admin_db directly)
 def load_auth():
-    """Load authentication data - supports multiple users with roles"""
-    if AUTH_FILE.exists():
-        try:
-            with open(AUTH_FILE, 'r') as f:
-                data = json.load(f)
-                # Support both old format (single user) and new format (users list)
-                if isinstance(data, dict) and 'users' in data:
-                    return data
-                elif isinstance(data, dict) and 'username' in data:
-                    # Migrate old format to new format
-                    return {
-                        "users": [{
-                            "username": data.get("username", "admin"),
-                            "password": data.get("password", generate_password_hash("admin123")),
-                            "role": "super_admin"
-                        }]
-                    }
-                return data
-        except:
-            pass
-    
-    # Create default auth with super_admin
-    default_auth = {
-        "users": [{
-            "username": "admin",
-            "password": generate_password_hash("admin123"),
-            "role": "super_admin"
-        }]
-    }
-    save_auth(default_auth)
-    return default_auth
-
-def get_user_by_username(username):
-    """Get user by username from auth data"""
-    auth_data = load_auth()
-    users = auth_data.get("users", [])
-    for user in users:
-        if user.get("username") == username:
-            return user
-    return None
+    """Legacy function - returns empty dict structure for compatibility"""
+    # Try to migrate from JSON if exists
+    migrate_from_json()
+    return {"users": []}  # Not used anymore, but kept for compatibility
 
 def save_auth(auth_data):
-    """Save authentication data"""
-    try:
-        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        with open(AUTH_FILE, 'w') as f:
-            json.dump(auth_data, f, indent=2)
-        return True
-    except Exception as e:
-        print(f"Error saving auth: {e}")
-        return False
+    """Legacy function - no-op, data is now in SQLite"""
+    return True  # Always return True for compatibility
 
 def login_required(f):
     """Decorator to require login with IP checking for normal admins"""
@@ -178,12 +142,10 @@ def login_required(f):
             allowed, message = check_ip_access(username, client_ip)
             
             if not allowed:
-                # Check if account is locked
-                auth_data = load_auth()
-                users = auth_data.get('users', [])
-                user = next((u for u in users if u.get('username') == username), None)
+                # Check if account is locked (using SQLite)
+                user = get_user_by_username(username)
                 
-                if user and user.get('account_locked', False):
+                if user and bool(user.get('account_locked', 0)):
                     session['account_locked'] = True
                     session.clear()  # Clear session on lockout
                     if request.path.startswith('/api/'):
@@ -287,18 +249,8 @@ def send_ip_warning_notification(username, client_ip, attempt_number, account_lo
         safe_print(f"[IP WARNING] Error sending notification: {e}")
 
 def check_ip_access(username, client_ip):
-    """Check if IP is allowed for user and track failed attempts"""
-    auth_data = load_auth()
-    users = auth_data.get('users', [])
-    
-    # Find user
-    user = None
-    user_index = -1
-    for i, u in enumerate(users):
-        if u.get('username') == username:
-            user = u
-            user_index = i
-            break
+    """Check if IP is allowed for user and track failed attempts - uses SQLite with transactions"""
+    user = get_user_by_username(username)
     
     if not user:
         return False, "User not found"
@@ -308,70 +260,53 @@ def check_ip_access(username, client_ip):
         return True, "Super admin - no IP restriction"
     
     # Check if account is locked
-    if user.get('account_locked', False):
+    if user.get('account_locked', 0) == 1:
         return False, "Account locked due to unauthorized IP access. Please contact support."
     
-    # Get allowed IPs for user
-    allowed_ips = user.get('allowed_ips', [])
+    # Get allowed IPs for user (parse JSON)
+    allowed_ips_json = user.get('allowed_ips', '[]')
+    try:
+        allowed_ips = json.loads(allowed_ips_json) if allowed_ips_json else []
+    except:
+        allowed_ips = []
     
     # If no IPs configured, allow all (backward compatibility)
     if not allowed_ips or len(allowed_ips) == 0:
         return True, "No IP restrictions configured"
     
-    # Create updated users list to preserve all users
-    updated_users = []
-    needs_save = False
-    
     # Check if current IP is allowed
     if client_ip in allowed_ips:
-        # Reset failed attempts on successful access
-        for i, u in enumerate(users):
-            if i == user_index:
-                # Create a copy of the user to preserve all fields
-                updated_user = u.copy()
-                if 'failed_ip_attempts' in updated_user:
-                    updated_user['failed_ip_attempts'] = {}
-                    needs_save = True
-                updated_users.append(updated_user)
-            else:
-                # Preserve all other users exactly as they are
-                updated_users.append(u)
-        
-        if needs_save:
-            auth_data['users'] = updated_users
-            save_auth(auth_data)
+        # Reset failed attempts on successful access (using transaction)
+        update_user_ip_access(username, clear_failed=True)
         return True, "IP allowed"
     
     # IP not allowed - track failed attempt
-    failed_attempts = user.get('failed_ip_attempts', {})
+    failed_attempts_json = user.get('failed_ip_attempts', '{}')
+    try:
+        failed_attempts = json.loads(failed_attempts_json) if failed_attempts_json else {}
+    except:
+        failed_attempts = {}
+    
     failed_attempts[client_ip] = failed_attempts.get(client_ip, 0) + 1
     attempt_count = failed_attempts[client_ip]
     
-    # Create updated users list with modified user
-    for i, u in enumerate(users):
-        if i == user_index:
-            # Create a copy of the user to preserve all fields
-            updated_user = u.copy()
-            updated_user['failed_ip_attempts'] = failed_attempts
-            
-            # Lock account after 3 failed attempts from unauthorized IP
-            if attempt_count >= 3:
-                updated_user['account_locked'] = True
-                updated_user['lock_reason'] = f"Account locked after 3 unauthorized IP access attempts from {client_ip}"
-                updated_user['locked_at'] = datetime.now().isoformat()
-                
-                auth_data['users'] = updated_users
-                save_auth(auth_data)
-                
-                # Send final notification (account locked)
-                send_ip_warning_notification(username, client_ip, 3, account_locked=True)
-                
-                return False, "Account locked after 3 unauthorized IP access attempts. Please contact support to restore access."
-            
-            updated_users.append(updated_user)
-        else:
-            # Preserve all other users exactly as they are
-            updated_users.append(u)
+    # Lock account after 3 failed attempts from unauthorized IP
+    if attempt_count >= 3:
+        update_user_ip_access(
+            username,
+            failed_attempts=failed_attempts,
+            account_locked=True,
+            lock_reason=f"Account locked after 3 unauthorized IP access attempts from {client_ip}",
+            locked_at=datetime.now().isoformat()
+        )
+        
+        # Send final notification (account locked)
+        send_ip_warning_notification(username, client_ip, 3, account_locked=True)
+        
+        return False, "Account locked after 3 unauthorized IP access attempts. Please contact support to restore access."
+    
+    # Update failed attempts (using transaction)
+    update_user_ip_access(username, failed_attempts=failed_attempts)
     
     # Send warning notification based on attempt number
     if attempt_count == 1:
@@ -379,8 +314,6 @@ def check_ip_access(username, client_ip):
     elif attempt_count == 2:
         send_ip_warning_notification(username, client_ip, 2)
     
-    auth_data['users'] = updated_users
-    save_auth(auth_data)
     remaining = 3 - attempt_count
     return False, f"Unauthorized IP address. {remaining} attempt(s) remaining before account lockout."
 
@@ -653,8 +586,9 @@ def login():
                 allowed, message = check_ip_access(username, client_ip)
                 
                 if not allowed:
-                    # Check if account is locked
-                    if user.get('account_locked', False):
+                    # Check if account is locked (SQLite stores as integer 0/1)
+                    account_locked = bool(user.get('account_locked', 0))
+                    if account_locked:
                         config = load_config()
                         support_telegram = config.get("support_telegram", "")
                         support_msg = f" Contact support on Telegram: @{support_telegram}" if support_telegram else ""
@@ -959,26 +893,31 @@ def notifications():
 @app.route('/api/admins', methods=['GET'])
 @super_admin_required
 def get_all_admins():
-    """Get all admin users"""
-    auth_data = load_auth()
-    users = auth_data.get("users", [])
-    # Remove password from response
-    admin_list = []
-    for user in users:
-        admin_info = {
-            "username": user.get("username"),
-            "role": user.get("role", "admin"),
-            "subscription_expires": user.get("subscription_expires"),
-            "subscription_status": user.get("subscription_status", "active"),
-            "created_at": user.get("created_at")
-        }
-        admin_list.append(admin_info)
-    return jsonify({"admins": admin_list})
+    """Get all admin users from SQLite"""
+    try:
+        users = get_all_users()
+        # Remove password and parse JSON fields
+        admin_list = []
+        for user in users:
+            admin_info = {
+                "username": user.get("username"),
+                "role": user.get("role", "admin"),
+                "subscription_expires": user.get("subscription_expires"),
+                "subscription_status": user.get("subscription_status", "active"),
+                "created_at": user.get("created_at"),
+                "account_locked": bool(user.get("account_locked", 0)),
+                "lock_reason": user.get("lock_reason"),
+                "locked_at": user.get("locked_at")
+            }
+            admin_list.append(admin_info)
+        return jsonify({"admins": admin_list})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/admins', methods=['POST'])
 @super_admin_required
 def create_admin():
-    """Create a new admin user"""
+    """Create a new admin user using SQLite"""
     try:
         data = request.json
         username = data.get('username')
@@ -988,109 +927,48 @@ def create_admin():
         if not username or not password:
             return jsonify({"status": "error", "message": "Username and password are required"}), 400
         
-        auth_data = load_auth()
-        users = auth_data.get("users", [])
+        # Create user using SQLite (with transaction)
+        create_user(username, password, role='admin', subscription_days=subscription_days)
         
-        # Check if username already exists
-        if any(u.get('username') == username for u in users):
-            return jsonify({"status": "error", "message": "Username already exists"}), 400
-        
-        # Calculate subscription expiration date
-        from datetime import datetime, timedelta
-        expires_date = datetime.now() + timedelta(days=subscription_days)
-        
-        # Create new admin user
-        new_user = {
-            "username": username,
-            "password": generate_password_hash(password),
-            "role": "admin",
-            "subscription_expires": expires_date.isoformat(),
-            "subscription_status": "active",  # Default to active
-            "created_at": datetime.now().isoformat()
-        }
-        
-        users.append(new_user)
-        auth_data["users"] = users
-        
-        if save_auth(auth_data):
-            return jsonify({"status": "success", "message": "Admin user created successfully"})
-        else:
-            return jsonify({"status": "error", "message": "Failed to save user"}), 500
+        return jsonify({"status": "success", "message": "Admin user created successfully"})
             
-    except Exception as e:
+    except ValueError as e:
         return jsonify({"status": "error", "message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/admins/<username>', methods=['PUT'])
 @super_admin_required
 def update_admin(username):
-    """Update admin user subscription"""
+    """Update admin user subscription using SQLite"""
     try:
         data = request.json
         subscription_days = data.get('subscription_days')
         subscription_status = data.get('subscription_status')
         
-        auth_data = load_auth()
-        users = auth_data.get("users", [])
-        
-        user_found = False
-        old_status = None
-        old_expires = None
-        updated_user = None
-        days_added = None
-        updated_users = []
-        for user in users:
-            if user.get('username') == username:
-                user_found = True
-                old_status = user.get('subscription_status', 'active')
-                old_expires = user.get('subscription_expires')
-                # Create a copy of the user to preserve all fields
-                updated_user = user.copy()
-                
-                if subscription_days is not None:
-                    from datetime import datetime, timedelta
-                    # Calculate new expiry date
-                    if old_expires:
-                        try:
-                            old_date = datetime.fromisoformat(old_expires)
-                            # If old date is in the future, extend from there, otherwise from now
-                            if old_date > datetime.now():
-                                expires_date = old_date + timedelta(days=int(subscription_days))
-                                # Calculate days added
-                                days_added = int(subscription_days)
-                            else:
-                                expires_date = datetime.now() + timedelta(days=int(subscription_days))
-                                # Calculate days added from now
-                                days_added = int(subscription_days)
-                        except:
-                            expires_date = datetime.now() + timedelta(days=int(subscription_days))
-                            days_added = int(subscription_days)
-                    else:
-                        expires_date = datetime.now() + timedelta(days=int(subscription_days))
-                        days_added = int(subscription_days)
-                    
-                    updated_user['subscription_expires'] = expires_date.isoformat()
-                
-                if subscription_status is not None:
-                    # Validate status
-                    if subscription_status in ['active', 'suspended', 'expired']:
-                        updated_user['subscription_status'] = subscription_status
-                        # If setting to active, ensure it continues (don't change date)
-                        if subscription_status == 'active':
-                            # Keep existing expiration date, just activate
-                            pass
-                    else:
-                        return jsonify({"status": "error", "message": "Invalid subscription status"}), 400
-                
-                updated_users.append(updated_user)
-            else:
-                # Preserve all other users exactly as they are
-                updated_users.append(user)
-        
-        if not user_found:
+        # Get current user to calculate days_added
+        user = get_user_by_username(username)
+        if not user:
             return jsonify({"status": "error", "message": "User not found"}), 404
         
-        auth_data["users"] = updated_users
-        if save_auth(auth_data):
+        old_status = user.get('subscription_status', 'active')
+        old_expires = user.get('subscription_expires')
+        days_added = None
+        
+        # Calculate days_added for notification
+        if subscription_days is not None and old_expires:
+            try:
+                from datetime import datetime, timedelta
+                old_date = datetime.fromisoformat(old_expires)
+                if old_date > datetime.now():
+                    days_added = int(subscription_days)
+            except:
+                pass
+        
+        # Update user using SQLite (with transaction)
+        updated_user = update_user_subscription(username, subscription_days, subscription_status)
+        
+        if updated_user:
             try:
                 config = load_config()
                 if config.get("telegram_enable") and config.get("telegram_token") and config.get("telegr_chatid"):
@@ -1172,55 +1050,62 @@ def update_admin(username):
             
             return jsonify({"status": "success", "message": "Admin updated successfully"})
         else:
-            return jsonify({"status": "error", "message": "Failed to save changes"}), 500
+            return jsonify({"status": "error", "message": "Failed to update user"}), 500
             
-    except Exception as e:
+    except ValueError as e:
         return jsonify({"status": "error", "message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/admins/<username>', methods=['DELETE'])
 @super_admin_required
 def delete_admin(username):
-    """Delete admin user"""
+    """Delete admin user using SQLite"""
     try:
-        auth_data = load_auth()
-        users = auth_data.get("users", [])
+        # Delete user using SQLite (with transaction, prevents deleting super_admin)
+        success = delete_user(username)
         
-        # Don't allow deleting super_admin
-        original_count = len(users)
-        users = [u for u in users if not (u.get('username') == username and u.get('role') != 'super_admin')]
-        
-        if len(users) == original_count:
-            return jsonify({"status": "error", "message": "User not found or cannot delete super admin"}), 404
-        
-        auth_data["users"] = users
-        if save_auth(auth_data):
+        if success:
             return jsonify({"status": "success", "message": "Admin deleted successfully"})
         else:
-            return jsonify({"status": "error", "message": "Failed to save changes"}), 500
+            return jsonify({"status": "error", "message": "User not found or cannot delete super admin"}), 404
             
-    except Exception as e:
+    except ValueError as e:
         return jsonify({"status": "error", "message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/admins/<username>/ip-whitelist', methods=['GET'])
 @super_admin_required
 def get_user_ip_whitelist(username):
-    """Get allowed IPs for a user"""
+    """Get allowed IPs for a user from SQLite"""
     try:
-        auth_data = load_auth()
-        users = auth_data.get("users", [])
-        
-        user = next((u for u in users if u.get('username') == username), None)
+        user = get_user_by_username(username)
         if not user:
             return jsonify({"status": "error", "message": "User not found"}), 404
+        
+        # Parse JSON fields
+        allowed_ips_json = user.get('allowed_ips', '[]')
+        failed_attempts_json = user.get('failed_ip_attempts', '{}')
+        
+        try:
+            allowed_ips = json.loads(allowed_ips_json) if allowed_ips_json else []
+        except:
+            allowed_ips = []
+        
+        try:
+            failed_ip_attempts = json.loads(failed_attempts_json) if failed_attempts_json else {}
+        except:
+            failed_ip_attempts = {}
         
         return jsonify({
             "status": "success",
             "username": username,
-            "allowed_ips": user.get('allowed_ips', []),
-            "account_locked": user.get('account_locked', False),
+            "allowed_ips": allowed_ips,
+            "account_locked": bool(user.get('account_locked', 0)),
             "lock_reason": user.get('lock_reason', ''),
             "locked_at": user.get('locked_at', ''),
-            "failed_ip_attempts": user.get('failed_ip_attempts', {})
+            "failed_ip_attempts": failed_ip_attempts
         })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 400
@@ -1228,7 +1113,7 @@ def get_user_ip_whitelist(username):
 @app.route('/api/admins/<username>/ip-whitelist', methods=['POST'])
 @super_admin_required
 def set_user_ip_whitelist(username):
-    """Set allowed IPs for a user"""
+    """Set allowed IPs for a user using SQLite with transaction"""
     try:
         data = request.json
         allowed_ips = data.get('allowed_ips', [])
@@ -1236,59 +1121,51 @@ def set_user_ip_whitelist(username):
         if not isinstance(allowed_ips, list):
             return jsonify({"status": "error", "message": "allowed_ips must be a list"}), 400
         
-        auth_data = load_auth()
-        users = auth_data.get("users", [])
+        # Update IP whitelist using SQLite (with transaction)
+        update_user_ip_whitelist(username, allowed_ips)
         
-        user_found = False
-        updated_users = []
-        for user in users:
-            if user.get('username') == username:
-                user_found = True
-                # Create a copy of the user dict to preserve all fields
-                updated_user = user.copy()
-                updated_user['allowed_ips'] = allowed_ips
-                # Clear failed attempts when IPs are updated
-                updated_user['failed_ip_attempts'] = {}
-                updated_users.append(updated_user)
-            else:
-                # Preserve all other users exactly as they are
-                updated_users.append(user)
-        
-        if not user_found:
-            return jsonify({"status": "error", "message": "User not found"}), 404
-        
-        auth_data["users"] = updated_users
-        if save_auth(auth_data):
-            return jsonify({
-                "status": "success", 
-                "message": f"IP whitelist updated for {username}",
-                "allowed_ips": allowed_ips
-            })
-        else:
-            return jsonify({"status": "error", "message": "Failed to save changes"}), 500
+        return jsonify({
+            "status": "success", 
+            "message": f"IP whitelist updated for {username}",
+            "allowed_ips": allowed_ips
+        })
             
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 404
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 400
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/admins/locked-accounts', methods=['GET'])
 @super_admin_required
 def get_locked_accounts():
-    """Get all locked accounts"""
+    """Get all locked accounts from SQLite"""
     try:
-        auth_data = load_auth()
-        users = auth_data.get("users", [])
+        locked_users = get_locked_accounts()
         
         locked_accounts = []
-        for user in users:
-            if user.get('account_locked', False):
-                locked_accounts.append({
-                    "username": user.get('username'),
-                    "role": user.get('role'),
-                    "lock_reason": user.get('lock_reason', ''),
-                    "locked_at": user.get('locked_at', ''),
-                    "failed_ip_attempts": user.get('failed_ip_attempts', {}),
-                    "allowed_ips": user.get('allowed_ips', [])
-                })
+        for user in locked_users:
+            # Parse JSON fields
+            allowed_ips_json = user.get('allowed_ips', '[]')
+            failed_attempts_json = user.get('failed_ip_attempts', '{}')
+            
+            try:
+                allowed_ips = json.loads(allowed_ips_json) if allowed_ips_json else []
+            except:
+                allowed_ips = []
+            
+            try:
+                failed_ip_attempts = json.loads(failed_attempts_json) if failed_attempts_json else {}
+            except:
+                failed_ip_attempts = {}
+            
+            locked_accounts.append({
+                "username": user.get('username'),
+                "role": user.get('role'),
+                "lock_reason": user.get('lock_reason', ''),
+                "locked_at": user.get('locked_at', ''),
+                "failed_ip_attempts": failed_ip_attempts,
+                "allowed_ips": allowed_ips
+            })
         
         return jsonify({
             "status": "success",
@@ -1301,45 +1178,42 @@ def get_locked_accounts():
 @app.route('/api/admins/<username>/restore-access', methods=['POST'])
 @super_admin_required
 def restore_user_access(username):
-    """Restore access for a locked user and optionally add new IP"""
+    """Restore access for a locked user and optionally add new IP using SQLite"""
     try:
         data = request.json
         new_ip = data.get('new_ip', None)  # Optional: add new IP to whitelist
         
-        auth_data = load_auth()
-        users = auth_data.get("users", [])
-        
-        user_found = False
-        updated_users = []
-        for user in users:
-            if user.get('username') == username:
-                user_found = True
-                # Create a copy of the user to preserve all fields
-                updated_user = user.copy()
-                
-                # Unlock account
-                updated_user['account_locked'] = False
-                updated_user.pop('lock_reason', None)
-                updated_user.pop('locked_at', None)
-                updated_user['failed_ip_attempts'] = {}  # Clear failed attempts
-                
-                # Add new IP to whitelist if provided
-                if new_ip:
-                    allowed_ips = updated_user.get('allowed_ips', [])
-                    if new_ip not in allowed_ips:
-                        allowed_ips.append(new_ip)
-                        updated_user['allowed_ips'] = allowed_ips
-                
-                updated_users.append(updated_user)
-            else:
-                # Preserve all other users exactly as they are
-                updated_users.append(user)
-        
-        if not user_found:
+        user = get_user_by_username(username)
+        if not user:
             return jsonify({"status": "error", "message": "User not found"}), 404
         
-        auth_data["users"] = updated_users
-        if save_auth(auth_data):
+        # Get current allowed IPs
+        allowed_ips_json = user.get('allowed_ips', '[]')
+        try:
+            allowed_ips = json.loads(allowed_ips_json) if allowed_ips_json else []
+        except:
+            allowed_ips = []
+        
+        # Add new IP if provided
+        if new_ip and new_ip not in allowed_ips:
+            allowed_ips.append(new_ip)
+        
+        # Restore access using SQLite (with transaction)
+        # First unlock the account
+        update_user_ip_access(
+            username,
+            account_locked=False,
+            clear_failed=True
+        )
+        
+        # Then update IP whitelist if new IP was added
+        if new_ip:
+            update_user_ip_whitelist(username, allowed_ips)
+        
+        # Get updated user for response
+        updated_user = get_user_by_username(username)
+        
+        if updated_user:
             # Send notification to user that access has been restored
             try:
                 config = load_config()
@@ -1373,15 +1247,22 @@ def restore_user_access(username):
             if new_ip:
                 message += f" and IP {new_ip} added to whitelist"
             
+            # Parse allowed_ips from updated_user
+            allowed_ips_json = updated_user.get('allowed_ips', '[]')
+            try:
+                allowed_ips_list = json.loads(allowed_ips_json) if allowed_ips_json else []
+            except:
+                allowed_ips_list = []
+            
             return jsonify({
                 "status": "success",
                 "message": message,
                 "username": username,
                 "account_locked": False,
-                "allowed_ips": user.get('allowed_ips', [])
+                "allowed_ips": allowed_ips_list
             })
         else:
-            return jsonify({"status": "error", "message": "Failed to save changes"}), 500
+            return jsonify({"status": "error", "message": "Failed to restore access"}), 500
             
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 400
@@ -1888,9 +1769,10 @@ def startup_check():
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     print(f"[OK] Config directory: {CONFIG_DIR}")
     
-    # Check auth
-    auth = load_auth()
-    print(f"[OK] Auth initialized: username={auth.get('username')}")
+    # Check database
+    from admin_db import get_all_users
+    users = get_all_users()
+    print(f"[OK] SQLite database initialized: {len(users)} user(s) found")
     
     # Check database
     config = load_config()
@@ -1958,8 +1840,12 @@ if __name__ == '__main__':
     # Create config directory
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     
-    # Initialize auth if needed
-    load_auth()
+    # Initialize SQLite database and migrate from JSON if needed
+    from admin_db import init_database, migrate_from_json
+    init_database()
+    migrated = migrate_from_json()
+    if migrated:
+        safe_print("[MIGRATION] Successfully migrated admin data from JSON to SQLite")
     
     # Send startup notification
     send_startup_notification()
