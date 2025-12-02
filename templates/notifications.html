@@ -298,6 +298,47 @@
                     </div>
                 </div>
                 
+                <div class="notification-section" style="border-top: 2px solid rgba(255,255,255,0.1); padding-top: 30px; margin-top: 30px;">
+                    <h3>🔒 IP Access Warning Notifications</h3>
+                    <p style="color: rgba(255,255,255,0.7); margin-bottom: 20px;">These notifications are sent to normal admin users when they attempt to access the panel from unauthorized IP addresses.</p>
+                    
+                    <div class="form-group">
+                        <label>⚠️ First Warning (1st unauthorized attempt)</label>
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-primary" onclick="prefillTemplate('ip-warning-first', 'default')">📝 Default Template</button>
+                        </div>
+                        <textarea id="ip-warning-first" placeholder="First warning message..."></textarea>
+                        <small style="color: rgba(255,255,255,0.6);">Sent on the first unauthorized IP access attempt. Placeholders: {username}, {ip}</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>🔴 Second Warning (2nd unauthorized attempt)</label>
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-primary" onclick="prefillTemplate('ip-warning-second', 'default')">📝 Default Template</button>
+                        </div>
+                        <textarea id="ip-warning-second" placeholder="Second warning message..."></textarea>
+                        <small style="color: rgba(255,255,255,0.6);">Sent on the second unauthorized IP access attempt. Placeholders: {username}, {ip}</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>🚫 Account Locked (3rd unauthorized attempt)</label>
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-primary" onclick="prefillTemplate('ip-warning-locked', 'default')">📝 Default Template</button>
+                        </div>
+                        <textarea id="ip-warning-locked" placeholder="Account locked message..."></textarea>
+                        <small style="color: rgba(255,255,255,0.6);">Sent when account is locked after 3 unauthorized IP access attempts. Placeholders: {username}, {ip}</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>✅ Account Access Restored</label>
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-primary" onclick="prefillTemplate('account-restore', 'default')">📝 Default Template</button>
+                        </div>
+                        <textarea id="account-restore" placeholder="Account restore message..."></textarea>
+                        <small style="color: rgba(255,255,255,0.6);">Sent when a locked account's access is restored. Placeholders: {username}, {new_ip_section} (will be empty or contain new IP info)</small>
+                    </div>
+                </div>
+                
                 <div class="notification-section">
                     <h3>🚀 Startup Notification</h3>
                     <div class="form-group">
@@ -344,6 +385,18 @@
                 'default': '*🚀 oXCookie Manager Started\\!*\n\nSystem is now online and ready to monitor sessions\\.',
                 'detailed': '*🚀 oXCookie Manager Started\\!*\n\n━━━━━━━━━━━━━━━━━━━━\n*Status:* System Online\n*Time:* `{time}`\n*Ready to monitor sessions\\.*\n━━━━━━━━━━━━━━━━━━━━',
                 'minimal': '🚀 *oXCookie Manager Started\\!* System is online\\.'
+            },
+            'ip-warning-first': {
+                'default': '⚠️ *First Warning*\n\nUnauthorized IP access attempt detected for user: *{username}*\n\nIP Address: `{ip}`\n\nThis is your first warning\\. Please use an authorized IP address\\.\n\nRemaining attempts: *2*'
+            },
+            'ip-warning-second': {
+                'default': '🔴 *Second Warning*\n\nUnauthorized IP access attempt detected for user: *{username}*\n\nIP Address: `{ip}`\n\nThis is your second warning\\. One more unauthorized attempt will result in account lockout\\.\n\nRemaining attempts: *1*'
+            },
+            'ip-warning-locked': {
+                'default': '🚫 *Account Locked*\n\nYour account has been locked due to unauthorized IP access attempts\\.\n\nUser: *{username}*\nUnauthorized IP: `{ip}`\n\nYour account has been locked after 3 unauthorized IP access attempts\\. Please contact support to restore access\\.'
+            },
+            'account-restore': {
+                'default': '✅ *Account Access Restored\\!*\n\nYour account access has been restored\\.\n\nUser: *{username}*{new_ip_section}\n\nYou can now log in again\\.'
             }
         };
         
@@ -437,6 +490,10 @@
                 document.getElementById('subscription-warning').value = data.subscription_warning || '';
                 document.getElementById('account-extension').value = data.account_extension || '';
                 document.getElementById('startup').value = data.startup || '';
+                document.getElementById('ip-warning-first').value = data.ip_warning_first || '';
+                document.getElementById('ip-warning-second').value = data.ip_warning_second || '';
+                document.getElementById('ip-warning-locked').value = data.ip_warning_locked || '';
+                document.getElementById('account-restore').value = data.account_restore || '';
             } catch (error) {
                 console.error('Error loading notification settings:', error);
                 showAlert('Error loading notification settings: ' + error.message, 'error');
@@ -451,6 +508,10 @@
             const subscriptionWarning = document.getElementById('subscription-warning').value;
             const accountExtension = document.getElementById('account-extension').value;
             const startup = document.getElementById('startup').value;
+            const ipWarningFirst = document.getElementById('ip-warning-first').value;
+            const ipWarningSecond = document.getElementById('ip-warning-second').value;
+            const ipWarningLocked = document.getElementById('ip-warning-locked').value;
+            const accountRestore = document.getElementById('account-restore').value;
             
             try {
                 const response = await fetch('/api/notifications', {
@@ -461,7 +522,11 @@
                         status_update: statusUpdate,
                         subscription_warning: subscriptionWarning,
                         account_extension: accountExtension,
-                        startup: startup
+                        startup: startup,
+                        ip_warning_first: ipWarningFirst,
+                        ip_warning_second: ipWarningSecond,
+                        ip_warning_locked: ipWarningLocked,
+                        account_restore: accountRestore
                     })
                 });
                 

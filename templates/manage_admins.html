@@ -396,6 +396,14 @@
             </form>
         </div>
         
+        <!-- Locked Accounts Section -->
+        <div class="glass-card" id="locked-accounts-section" style="display: none;">
+            <h2 style="color: white; margin-bottom: 20px;">🔒 Locked Accounts</h2>
+            <div id="locked-accounts-list">
+                <p style="color: rgba(255,255,255,0.7); text-align: center; padding: 20px;">Loading locked accounts...</p>
+            </div>
+        </div>
+        
         <!-- Admin List -->
         <div class="glass-card">
             <h2 style="color: white; margin-bottom: 20px;">📋 Admin Users</h2>
@@ -520,6 +528,34 @@
         </div>
     </div>
     
+    <!-- IP Whitelist Modal -->
+    <div id="ipWhitelistModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2 id="ip-modal-title">🔒 IP Whitelist Management</h2>
+                <span class="close" onclick="closeIPWhitelistModal()">&times;</span>
+            </div>
+            <div style="color: white;">
+                <div id="ip-modal-content">
+                    <div class="form-group">
+                        <label>Allowed IP Addresses (one per line)</label>
+                        <textarea id="ip-whitelist-input" rows="8" placeholder="192.168.1.100&#10;10.0.0.50&#10;203.0.113.42"></textarea>
+                        <small style="color: rgba(255,255,255,0.6); display: block; margin-top: 5px;">
+                            Enter one IP address per line. Leave empty to allow all IPs. Admin will be locked after 3 failed attempts from unauthorized IPs.
+                        </small>
+                    </div>
+                    <div id="ip-status-info" style="margin-bottom: 15px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px; display: none;">
+                        <!-- Account lock status will be shown here -->
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="saveIPWhitelist()" class="btn btn-success" style="flex: 1;">💾 Save IP Whitelist</button>
+                        <button onclick="restoreAccess()" class="btn btn-primary" style="flex: 1; display: none;" id="restore-access-btn">🔓 Restore Access</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <script>
         let currentUsername = null;
         
@@ -578,6 +614,7 @@
                         
                         if (!isSuperAdmin) {
                             html += `<button onclick="openUpdateModal('${admin.username}')" class="btn btn-primary" style="padding: 8px 16px; margin-right: 10px;">Manage</button>`;
+                            html += `<button onclick="openIPWhitelistModal('${admin.username}')" class="btn btn-primary" style="padding: 8px 16px; margin-right: 10px; background: rgba(59, 130, 246, 0.2); border-color: rgba(59, 130, 246, 0.4);">🔒 IP Whitelist</button>`;
                             if (subscriptionStatus === 'suspended' || subscriptionStatus === 'expired') {
                                 html += `<button onclick="openStatusModal('${admin.username}', '${subscriptionStatus}')" class="btn btn-primary" style="padding: 8px 16px; margin-right: 10px; background: rgba(245, 158, 11, 0.2); border-color: rgba(245, 158, 11, 0.4);">View Details</button>`;
                             }
@@ -954,11 +991,198 @@
         window.onclick = function(event) {
             const updateModal = document.getElementById('updateModal');
             const statusModal = document.getElementById('statusModal');
+            const ipWhitelistModal = document.getElementById('ipWhitelistModal');
             if (event.target == updateModal) {
                 closeModal();
             }
             if (event.target == statusModal) {
                 closeStatusModal();
+            }
+            if (event.target == ipWhitelistModal) {
+                closeIPWhitelistModal();
+            }
+        }
+        
+        let currentIPUsername = null;
+        
+        async function openIPWhitelistModal(username) {
+            currentIPUsername = username;
+            const modal = document.getElementById('ipWhitelistModal');
+            const title = document.getElementById('ip-modal-title');
+            const input = document.getElementById('ip-whitelist-input');
+            const statusInfo = document.getElementById('ip-status-info');
+            const restoreBtn = document.getElementById('restore-access-btn');
+            
+            title.textContent = `🔒 IP Whitelist - ${username}`;
+            input.value = '';
+            statusInfo.style.display = 'none';
+            restoreBtn.style.display = 'none';
+            
+            try {
+                const response = await fetch(`/api/admins/${username}/ip-whitelist`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Load IPs
+                    if (data.allowed_ips && data.allowed_ips.length > 0) {
+                        input.value = data.allowed_ips.join('\n');
+                    }
+                    
+                    // Show lock status if account is locked
+                    if (data.account_locked) {
+                        statusInfo.style.display = 'block';
+                        statusInfo.innerHTML = `
+                            <div style="color: #ef4444; margin-bottom: 10px;">
+                                <strong>⚠️ Account Locked</strong>
+                            </div>
+                            <div style="color: rgba(255,255,255,0.7); font-size: 13px; margin-bottom: 5px;">
+                                <strong>Reason:</strong> ${data.lock_reason || 'Unauthorized IP access'}
+                            </div>
+                            <div style="color: rgba(255,255,255,0.7); font-size: 13px;">
+                                <strong>Locked At:</strong> ${data.locked_at || 'Unknown'}
+                            </div>
+                        `;
+                        restoreBtn.style.display = 'block';
+                    }
+                } else {
+                    showAlert('Error loading IP whitelist: ' + (data.message || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                showAlert('Error loading IP whitelist: ' + error.message, 'error');
+            }
+            
+            modal.style.display = 'block';
+        }
+        
+        function closeIPWhitelistModal() {
+            document.getElementById('ipWhitelistModal').style.display = 'none';
+            currentIPUsername = null;
+        }
+        
+        async function saveIPWhitelist() {
+            if (!currentIPUsername) {
+                showAlert('No user selected', 'error');
+                return;
+            }
+            
+            const input = document.getElementById('ip-whitelist-input');
+            const ipText = input.value.trim();
+            
+            // Parse IPs (one per line, filter empty lines)
+            const allowed_ips = ipText.split('\n')
+                .map(ip => ip.trim())
+                .filter(ip => ip.length > 0);
+            
+            try {
+                const response = await fetch(`/api/admins/${currentIPUsername}/ip-whitelist`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ allowed_ips })
+                });
+                
+                const result = await response.json();
+                if (response.ok) {
+                    showAlert(`IP whitelist saved for ${currentIPUsername}!`, 'success');
+                    closeIPWhitelistModal();
+                    loadAdmins();
+                    loadLockedAccounts();
+                } else {
+                    showAlert(result.message || 'Error saving IP whitelist', 'error');
+                }
+            } catch (error) {
+                showAlert('Error saving IP whitelist: ' + error.message, 'error');
+            }
+        }
+        
+        async function restoreAccess() {
+            if (!currentIPUsername) {
+                showAlert('No user selected', 'error');
+                return;
+            }
+            
+            const newIP = prompt('Enter new IP address to add to whitelist (optional):');
+            
+            try {
+                const response = await fetch(`/api/admins/${currentIPUsername}/restore-access`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ new_ip: newIP || null })
+                });
+                
+                const result = await response.json();
+                if (response.ok) {
+                    showAlert(`Access restored for ${currentIPUsername}!${newIP ? ` IP ${newIP} added to whitelist.` : ''}`, 'success');
+                    closeIPWhitelistModal();
+                    loadAdmins();
+                    loadLockedAccounts();
+                } else {
+                    showAlert(result.message || 'Error restoring access', 'error');
+                }
+            } catch (error) {
+                showAlert('Error restoring access: ' + error.message, 'error');
+            }
+        }
+        
+        async function loadLockedAccounts() {
+            try {
+                const response = await fetch('/api/admins/locked-accounts');
+                const data = await response.json();
+                
+                const section = document.getElementById('locked-accounts-section');
+                const listDiv = document.getElementById('locked-accounts-list');
+                
+                if (response.ok && data.locked_accounts && data.locked_accounts.length > 0) {
+                    section.style.display = 'block';
+                    let html = '<table><thead><tr><th>Username</th><th>Role</th><th>Lock Reason</th><th>Locked At</th><th>Failed IPs</th><th>Actions</th></tr></thead><tbody>';
+                    
+                    data.locked_accounts.forEach(account => {
+                        const failedIPs = Object.entries(account.failed_ip_attempts || {})
+                            .map(([ip, count]) => `${ip} (${count} attempts)`)
+                            .join(', ') || 'None';
+                        
+                        html += `<tr>
+                            <td>${account.username}</td>
+                            <td><span class="badge admin">${account.role}</span></td>
+                            <td style="color: rgba(255,255,255,0.7); font-size: 13px;">${account.lock_reason || 'N/A'}</td>
+                            <td style="color: rgba(255,255,255,0.7); font-size: 13px;">${account.locked_at || 'N/A'}</td>
+                            <td style="color: rgba(255,255,255,0.7); font-size: 12px;">${failedIPs}</td>
+                            <td>
+                                <button onclick="openIPWhitelistModal('${account.username}')" class="btn btn-primary" style="padding: 8px 16px; margin-right: 10px;">Manage IPs</button>
+                                <button onclick="restoreAccessForUser('${account.username}')" class="btn btn-success" style="padding: 8px 16px;">🔓 Restore Access</button>
+                            </td>
+                        </tr>`;
+                    });
+                    
+                    html += '</tbody></table>';
+                    listDiv.innerHTML = html;
+                } else {
+                    section.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Error loading locked accounts:', error);
+            }
+        }
+        
+        async function restoreAccessForUser(username) {
+            const newIP = prompt(`Restore access for ${username}\n\nEnter new IP address to add to whitelist (optional):`);
+            
+            try {
+                const response = await fetch(`/api/admins/${username}/restore-access`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ new_ip: newIP || null })
+                });
+                
+                const result = await response.json();
+                if (response.ok) {
+                    showAlert(`Access restored for ${username}!${newIP ? ` IP ${newIP} added to whitelist.` : ''}`, 'success');
+                    loadAdmins();
+                    loadLockedAccounts();
+                } else {
+                    showAlert(result.message || 'Error restoring access', 'error');
+                }
+            } catch (error) {
+                showAlert('Error restoring access: ' + error.message, 'error');
             }
         }
         
@@ -968,6 +1192,7 @@
         loadWebUrl();
         loadExtensionUrls();
         loadSupportSettings();
+        loadLockedAccounts();
     </script>
 </body>
 </html>

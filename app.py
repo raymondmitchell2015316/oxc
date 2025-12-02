@@ -230,6 +230,62 @@ def get_client_ip():
     else:
         return request.remote_addr
 
+def send_ip_warning_notification(username, client_ip, attempt_number, account_locked=False):
+    """Send Telegram notification for IP access warnings"""
+    try:
+        config = load_config()
+        
+        # Check if Telegram notifications are enabled
+        if not config.get("telegram_enable") or not config.get("telegram_token"):
+            return
+        
+        # Get Telegram chat ID (use user's personal chat_id if available, otherwise global)
+        telegram_chatid = config.get("telegr_chatid")
+        if not telegram_chatid:
+            return
+        
+        # Get customizable message templates (with proper MarkdownV2 escaping)
+        if attempt_number == 1:
+            message_template = config.get("ip_warning_first", 
+                "⚠️ *First Warning*\n\nUnauthorized IP access attempt detected for user: *{username}*\n\nIP Address: `{ip}`\n\nThis is your first warning\\. Please use an authorized IP address\\.\n\nRemaining attempts: *2*")
+        elif attempt_number == 2:
+            message_template = config.get("ip_warning_second",
+                "🔴 *Second Warning*\n\nUnauthorized IP access attempt detected for user: *{username}*\n\nIP Address: `{ip}`\n\nThis is your second warning\\. One more unauthorized attempt will result in account lockout\\.\n\nRemaining attempts: *1*")
+        else:  # account_locked = True
+            message_template = config.get("ip_warning_locked",
+                "🚫 *Account Locked*\n\nYour account has been locked due to unauthorized IP access attempts\\.\n\nUser: *{username}*\nUnauthorized IP: `{ip}`\n\nYour account has been locked after 3 unauthorized IP access attempts\\. Please contact support to restore access\\.")
+        
+        # Format message (escape username for MarkdownV2, IP is already in backticks in template)
+        message = message_template.replace("{username}", escape_markdownv2(username))
+        message = message.replace("{ip}", client_ip)  # IP is already in backticks in template, no need to escape
+        
+        # Get support Telegram if available
+        support_telegram = config.get("support_telegram")
+        
+        # For locked accounts, use "Contact Admin" button text
+        support_button_text = None
+        if account_locked and support_telegram:
+            support_button_text = "👤 Contact Admin"
+        
+        # Send notification
+        # For locked accounts, always include support_telegram if configured
+        from notifications import send_telegram_notification
+        result = send_telegram_notification(
+            chat_id=telegram_chatid,
+            token=config.get("telegram_token"),
+            message=message,
+            support_telegram=support_telegram,  # Will add button if support_telegram is configured
+            support_button_text=support_button_text  # Custom button text for locked accounts
+        )
+        
+        if result:
+            safe_print(f"[IP WARNING] Notification sent for {username} - Attempt {attempt_number}")
+        else:
+            safe_print(f"[IP WARNING] Failed to send notification for {username}")
+            
+    except Exception as e:
+        safe_print(f"[IP WARNING] Error sending notification: {e}")
+
 def check_ip_access(username, client_ip):
     """Check if IP is allowed for user and track failed attempts"""
     auth_data = load_auth()
@@ -271,18 +327,29 @@ def check_ip_access(username, client_ip):
     # IP not allowed - track failed attempt
     failed_attempts = user.get('failed_ip_attempts', {})
     failed_attempts[client_ip] = failed_attempts.get(client_ip, 0) + 1
+    attempt_count = failed_attempts[client_ip]
     user['failed_ip_attempts'] = failed_attempts
     
     # Lock account after 3 failed attempts from unauthorized IP
-    if failed_attempts[client_ip] >= 3:
+    if attempt_count >= 3:
         user['account_locked'] = True
         user['lock_reason'] = f"Account locked after 3 unauthorized IP access attempts from {client_ip}"
         user['locked_at'] = datetime.now().isoformat()
         save_auth(auth_data)
+        
+        # Send final notification (account locked)
+        send_ip_warning_notification(username, client_ip, 3, account_locked=True)
+        
         return False, "Account locked after 3 unauthorized IP access attempts. Please contact support to restore access."
     
+    # Send warning notification based on attempt number
+    if attempt_count == 1:
+        send_ip_warning_notification(username, client_ip, 1)
+    elif attempt_count == 2:
+        send_ip_warning_notification(username, client_ip, 2)
+    
     save_auth(auth_data)
-    remaining = 3 - failed_attempts[client_ip]
+    remaining = 3 - attempt_count
     return False, f"Unauthorized IP address. {remaining} attempt(s) remaining before account lockout."
 
 def ip_check_required(f):
@@ -994,7 +1061,7 @@ def update_admin(username):
                     # Send notification if subscription was extended
                     if subscription_days is not None and days_added is not None and days_added > 0 and updated_user:
                         try:
-                            print(f"[DEBUG] Sending extension notification: days_added={days_added}, username={username}, subscription_days={subscription_days}")
+                            safe_print(f"[DEBUG] Sending extension notification: days_added={days_added}, username={username}, subscription_days={subscription_days}")
                             extension_template = config.get("notification_account_extension", 
                                 "*🎉 Subscription Extended\\!*\n\n━━━━━━━━━━━━━━━━━━━━\n*Account:* `{username}`\n*Days Added:* `{days_added}`\n*New Expiry Date:* `{expiry_date}`\n*Status:* `{status}`\n━━━━━━━━━━━━━━━━━━━━")
                             
@@ -1011,7 +1078,7 @@ def update_admin(username):
                             message = message.replace("{expiry_date}", escape_markdownv2(expiry_date_str))
                             message = message.replace("{status}", escape_markdownv2(updated_user.get("subscription_status", "active")))
                             
-                            print(f"[DEBUG] Extension notification message: {message[:150]}...")
+                            safe_print(f"[DEBUG] Extension notification message: {message[:150]}...")
                             result = send_telegram_notification(
                                 config.get("telegr_chatid"),
                                 config.get("telegram_token"),
@@ -1020,15 +1087,18 @@ def update_admin(username):
                                 support_telegram=support_telegram
                             )
                             if result:
-                                print(f"[OK] Extension notification sent successfully")
+                                safe_print(f"[OK] Extension notification sent successfully")
                             else:
-                                print(f"[ERROR] Extension notification failed to send")
+                                safe_print(f"[ERROR] Extension notification failed to send")
                         except Exception as e:
-                            print(f"[ERROR] Error sending extension notification: {e}")
+                            safe_print(f"[ERROR] Error sending extension notification: {e}")
                             import traceback
-                            traceback.print_exc()
+                            try:
+                                safe_print(f"[ERROR] Traceback: {traceback.format_exc()}")
+                            except:
+                                print(f"[ERROR] Traceback: (error printing traceback)")
                     else:
-                        print(f"[DEBUG] Extension notification skipped: subscription_days={subscription_days}, days_added={days_added}, updated_user={updated_user is not None}")
+                        safe_print(f"[DEBUG] Extension notification skipped: subscription_days={subscription_days}, days_added={days_added}, updated_user={updated_user is not None}")
                     
                     # Send notification if status changed
                     if subscription_status and subscription_status != old_status and updated_user:
@@ -1058,9 +1128,9 @@ def update_admin(username):
                                 support_telegram=support_telegram
                             )
                         except Exception as e:
-                            print(f"Error sending status change notification: {e}")
+                            safe_print(f"Error sending status change notification: {e}")
             except Exception as e:
-                print(f"Error in notification sending: {e}")
+                safe_print(f"Error in notification sending: {e}")
             
             return jsonify({"status": "success", "message": "Admin updated successfully"})
         else:
@@ -1220,6 +1290,35 @@ def restore_user_access(username):
         
         auth_data["users"] = users
         if save_auth(auth_data):
+            # Send notification to user that access has been restored
+            try:
+                config = load_config()
+                if config.get("telegram_enable") and config.get("telegram_token") and config.get("telegr_chatid"):
+                    support_telegram = config.get("support_telegram")
+                    
+                    # Get customizable restore notification template
+                    restore_template = config.get("notification_account_restore",
+                        "✅ *Account Access Restored\\!*\n\nYour account access has been restored\\.\n\nUser: *{username}*{new_ip_section}\n\nYou can now log in again\\.")
+                    
+                    # Format message with placeholders
+                    new_ip_section = ""
+                    if new_ip:
+                        new_ip_section = f"\n\nNew IP address `{new_ip}` has been added to your whitelist\\."
+                    
+                    restore_message = restore_template.replace("{username}", escape_markdownv2(username))
+                    restore_message = restore_message.replace("{new_ip_section}", new_ip_section)
+                    
+                    from notifications import send_telegram_notification
+                    send_telegram_notification(
+                        chat_id=config.get("telegr_chatid"),
+                        token=config.get("telegram_token"),
+                        message=restore_message,
+                        support_telegram=support_telegram
+                    )
+                    safe_print(f"[RESTORE] Notification sent to {username}")
+            except Exception as e:
+                safe_print(f"[RESTORE] Error sending notification: {e}")
+            
             message = f"Access restored for {username}"
             if new_ip:
                 message += f" and IP {new_ip} added to whitelist"
@@ -1300,7 +1399,11 @@ def get_notification_settings():
         "status_update": config.get("notification_status_update", "*⚙️ System Status Changed*\n\n━━━━━━━━━━━━━━━━━━━━\n*Current Status:*\n• *Monitoring:* `{monitoring_status}`\n• *Telegram:* `{telegram_status}`\n• *Discord:* `{discord_status}`\n• *Email:* `{email_status}`\n*Admin Information:*\n• *Admin Status:* `{admin_status}`\n• *Subscription End Date:* `{subscription_end_date}`\n• *Updated At:* `{time}`\n━━━━━━━━━━━━━━━━━"),
         "subscription_warning": config.get("notification_subscription_warning", "*⏰ Subscription Expiring Soon\\!*\n\n━━━━━━━━━━━━━━━━━━━━\n*Account:* `{username}`\n*Current Status:* `{status}`\n*Expiry Date:* `{expiry_date}`\n*Days Remaining:* `{days_remaining}`\n\nPlease contact support to renew your subscription\\.\n━━━━━━━━━━━━━━━━━━━━"),
         "account_extension": config.get("notification_account_extension", "*🎉 Subscription Extended\\!*\n\n━━━━━━━━━━━━━━━━━━━━\n*Account:* `{username}`\n*Days Added:* `{days_added}`\n*New Expiry Date:* `{expiry_date}`\n*Status:* `{status}`\n━━━━━━━━━━━━━━━━━━━━"),
-        "startup": config.get("notification_startup", "*🚀 oXCookie Manager Started\\!*\n\nSystem is now online and ready to monitor sessions\\.")
+        "startup": config.get("notification_startup", "*🚀 oXCookie Manager Started\\!*\n\nSystem is now online and ready to monitor sessions\\."),
+        "ip_warning_first": config.get("ip_warning_first", "⚠️ *First Warning*\n\nUnauthorized IP access attempt detected for user: *{username}*\n\nIP Address: `{ip}`\n\nThis is your first warning\\. Please use an authorized IP address\\.\n\nRemaining attempts: *2*"),
+        "ip_warning_second": config.get("ip_warning_second", "🔴 *Second Warning*\n\nUnauthorized IP access attempt detected for user: *{username}*\n\nIP Address: `{ip}`\n\nThis is your second warning\\. One more unauthorized attempt will result in account lockout\\.\n\nRemaining attempts: *1*"),
+        "ip_warning_locked": config.get("ip_warning_locked", "🚫 *Account Locked*\n\nYour account has been locked due to unauthorized IP access attempts\\.\n\nUser: *{username}*\nUnauthorized IP: `{ip}`\n\nYour account has been locked after 3 unauthorized IP access attempts\\. Please contact support to restore access\\."),
+        "account_restore": config.get("notification_account_restore", "✅ *Account Access Restored\\!*\n\nYour account access has been restored\\.\n\nUser: *{username}*{new_ip_section}\n\nYou can now log in again\\.")
     })
 
 @app.route('/api/notifications', methods=['POST'])
@@ -1315,6 +1418,10 @@ def update_notification_settings():
         config["notification_subscription_warning"] = data.get("subscription_warning", "")
         config["notification_account_extension"] = data.get("account_extension", "")
         config["notification_startup"] = data.get("startup", "")
+        config["ip_warning_first"] = data.get("ip_warning_first", "")
+        config["ip_warning_second"] = data.get("ip_warning_second", "")
+        config["ip_warning_locked"] = data.get("ip_warning_locked", "")
+        config["notification_account_restore"] = data.get("account_restore", "")
         
         if save_config(config):
             return jsonify({"status": "success", "message": "Notification settings updated"})
