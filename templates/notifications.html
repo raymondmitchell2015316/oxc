@@ -249,6 +249,7 @@
                             <button type="button" class="btn btn-primary" onclick="prefillTemplate('incoming-cookie', 'default')">📝 Default Template</button>
                             <button type="button" class="btn btn-primary" onclick="prefillTemplate('incoming-cookie', 'detailed')">📋 Detailed Template</button>
                             <button type="button" class="btn btn-primary" onclick="prefillTemplate('incoming-cookie', 'minimal')">✨ Minimal Template</button>
+                            <button type="button" class="btn btn-success" onclick="testSessionNotification()" id="test-btn" style="margin-left: auto;">🧪 Test Notification</button>
                         </div>
                         <textarea id="incoming-cookie" placeholder="New cookie session detected!"></textarea>
                         <small style="color: rgba(255,255,255,0.6);">This message will be sent when a new cookie session is detected. Uses Telegram MarkdownV2 format.</small>
@@ -362,6 +363,68 @@
             setTimeout(() => {
                 alert.style.display = 'none';
             }, 5000);
+        }
+        
+        async function testSessionNotification() {
+            const testBtn = document.getElementById('test-btn');
+            const originalText = testBtn.textContent;
+            
+            // Disable button and show loading state
+            testBtn.disabled = true;
+            testBtn.textContent = '⏳ Sending...';
+            testBtn.style.opacity = '0.6';
+            
+            console.log('[TEST] Starting test notification...');
+            console.log('[TEST] URL: /api/notifications/test-session');
+            
+            try {
+                const response = await fetch('/api/notifications/test-session', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include'  // Include cookies for session authentication
+                });
+                
+                // Check if response is ok before trying to parse JSON
+                if (!response.ok) {
+                    // Try to get error message from response
+                    let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                    try {
+                        const errorData = await response.json();
+                        errorMessage = errorData.message || errorMessage;
+                    } catch (e) {
+                        // If response isn't JSON, use status text
+                    }
+                    
+                    if (response.status === 401) {
+                        showAlert('❌ Not authenticated. Please login again.', 'error');
+                    } else if (response.status === 403) {
+                        showAlert('❌ Access denied. Super admin privileges required.', 'error');
+                    } else if (response.status === 404) {
+                        showAlert('❌ Endpoint not found. Please refresh the page and try again.', 'error');
+                    } else {
+                        showAlert(`❌ ${errorMessage}`, 'error');
+                    }
+                    return;
+                }
+                
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    showAlert(`✅ Test notification sent successfully! Session ID: ${result.session_id} (Username: ${result.username})`, 'success');
+                } else {
+                    showAlert(`❌ ${result.message || 'Failed to send test notification'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Error testing notification:', error);
+                showAlert(`❌ Network error: ${error.message}. Please check your connection and try again.`, 'error');
+            } finally {
+                // Re-enable button
+                testBtn.disabled = false;
+                testBtn.textContent = originalText;
+                testBtn.style.opacity = '1';
+            }
         }
         
         async function loadNotificationSettings() {

