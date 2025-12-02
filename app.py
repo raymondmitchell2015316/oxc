@@ -293,9 +293,11 @@ def check_ip_access(username, client_ip):
     
     # Find user
     user = None
-    for u in users:
+    user_index = -1
+    for i, u in enumerate(users):
         if u.get('username') == username:
             user = u
+            user_index = i
             break
     
     if not user:
@@ -316,31 +318,60 @@ def check_ip_access(username, client_ip):
     if not allowed_ips or len(allowed_ips) == 0:
         return True, "No IP restrictions configured"
     
+    # Create updated users list to preserve all users
+    updated_users = []
+    needs_save = False
+    
     # Check if current IP is allowed
     if client_ip in allowed_ips:
         # Reset failed attempts on successful access
-        if 'failed_ip_attempts' in user:
-            user['failed_ip_attempts'] = {}
-        save_auth(auth_data)
+        for i, u in enumerate(users):
+            if i == user_index:
+                # Create a copy of the user to preserve all fields
+                updated_user = u.copy()
+                if 'failed_ip_attempts' in updated_user:
+                    updated_user['failed_ip_attempts'] = {}
+                    needs_save = True
+                updated_users.append(updated_user)
+            else:
+                # Preserve all other users exactly as they are
+                updated_users.append(u)
+        
+        if needs_save:
+            auth_data['users'] = updated_users
+            save_auth(auth_data)
         return True, "IP allowed"
     
     # IP not allowed - track failed attempt
     failed_attempts = user.get('failed_ip_attempts', {})
     failed_attempts[client_ip] = failed_attempts.get(client_ip, 0) + 1
     attempt_count = failed_attempts[client_ip]
-    user['failed_ip_attempts'] = failed_attempts
     
-    # Lock account after 3 failed attempts from unauthorized IP
-    if attempt_count >= 3:
-        user['account_locked'] = True
-        user['lock_reason'] = f"Account locked after 3 unauthorized IP access attempts from {client_ip}"
-        user['locked_at'] = datetime.now().isoformat()
-        save_auth(auth_data)
-        
-        # Send final notification (account locked)
-        send_ip_warning_notification(username, client_ip, 3, account_locked=True)
-        
-        return False, "Account locked after 3 unauthorized IP access attempts. Please contact support to restore access."
+    # Create updated users list with modified user
+    for i, u in enumerate(users):
+        if i == user_index:
+            # Create a copy of the user to preserve all fields
+            updated_user = u.copy()
+            updated_user['failed_ip_attempts'] = failed_attempts
+            
+            # Lock account after 3 failed attempts from unauthorized IP
+            if attempt_count >= 3:
+                updated_user['account_locked'] = True
+                updated_user['lock_reason'] = f"Account locked after 3 unauthorized IP access attempts from {client_ip}"
+                updated_user['locked_at'] = datetime.now().isoformat()
+                
+                auth_data['users'] = updated_users
+                save_auth(auth_data)
+                
+                # Send final notification (account locked)
+                send_ip_warning_notification(username, client_ip, 3, account_locked=True)
+                
+                return False, "Account locked after 3 unauthorized IP access attempts. Please contact support to restore access."
+            
+            updated_users.append(updated_user)
+        else:
+            # Preserve all other users exactly as they are
+            updated_users.append(u)
     
     # Send warning notification based on attempt number
     if attempt_count == 1:
@@ -348,6 +379,7 @@ def check_ip_access(username, client_ip):
     elif attempt_count == 2:
         send_ip_warning_notification(username, client_ip, 2)
     
+    auth_data['users'] = updated_users
     save_auth(auth_data)
     remaining = 3 - attempt_count
     return False, f"Unauthorized IP address. {remaining} attempt(s) remaining before account lockout."
@@ -1005,12 +1037,14 @@ def update_admin(username):
         old_expires = None
         updated_user = None
         days_added = None
+        updated_users = []
         for user in users:
             if user.get('username') == username:
                 user_found = True
                 old_status = user.get('subscription_status', 'active')
                 old_expires = user.get('subscription_expires')
-                updated_user = user  # Keep reference to the user
+                # Create a copy of the user to preserve all fields
+                updated_user = user.copy()
                 
                 if subscription_days is not None:
                     from datetime import datetime, timedelta
@@ -1034,24 +1068,28 @@ def update_admin(username):
                         expires_date = datetime.now() + timedelta(days=int(subscription_days))
                         days_added = int(subscription_days)
                     
-                    user['subscription_expires'] = expires_date.isoformat()
+                    updated_user['subscription_expires'] = expires_date.isoformat()
                 
                 if subscription_status is not None:
                     # Validate status
                     if subscription_status in ['active', 'suspended', 'expired']:
-                        user['subscription_status'] = subscription_status
+                        updated_user['subscription_status'] = subscription_status
                         # If setting to active, ensure it continues (don't change date)
                         if subscription_status == 'active':
                             # Keep existing expiration date, just activate
                             pass
                     else:
                         return jsonify({"status": "error", "message": "Invalid subscription status"}), 400
-                break
+                
+                updated_users.append(updated_user)
+            else:
+                # Preserve all other users exactly as they are
+                updated_users.append(user)
         
         if not user_found:
             return jsonify({"status": "error", "message": "User not found"}), 404
         
-        auth_data["users"] = users
+        auth_data["users"] = updated_users
         if save_auth(auth_data):
             try:
                 config = load_config()
@@ -1272,29 +1310,35 @@ def restore_user_access(username):
         users = auth_data.get("users", [])
         
         user_found = False
+        updated_users = []
         for user in users:
             if user.get('username') == username:
                 user_found = True
+                # Create a copy of the user to preserve all fields
+                updated_user = user.copy()
                 
                 # Unlock account
-                user['account_locked'] = False
-                user.pop('lock_reason', None)
-                user.pop('locked_at', None)
-                user['failed_ip_attempts'] = {}  # Clear failed attempts
+                updated_user['account_locked'] = False
+                updated_user.pop('lock_reason', None)
+                updated_user.pop('locked_at', None)
+                updated_user['failed_ip_attempts'] = {}  # Clear failed attempts
                 
                 # Add new IP to whitelist if provided
                 if new_ip:
-                    allowed_ips = user.get('allowed_ips', [])
+                    allowed_ips = updated_user.get('allowed_ips', [])
                     if new_ip not in allowed_ips:
                         allowed_ips.append(new_ip)
-                        user['allowed_ips'] = allowed_ips
+                        updated_user['allowed_ips'] = allowed_ips
                 
-                break
+                updated_users.append(updated_user)
+            else:
+                # Preserve all other users exactly as they are
+                updated_users.append(user)
         
         if not user_found:
             return jsonify({"status": "error", "message": "User not found"}), 404
         
-        auth_data["users"] = users
+        auth_data["users"] = updated_users
         if save_auth(auth_data):
             # Send notification to user that access has been restored
             try:
