@@ -1202,18 +1202,24 @@ def set_user_ip_whitelist(username):
         users = auth_data.get("users", [])
         
         user_found = False
+        updated_users = []
         for user in users:
             if user.get('username') == username:
                 user_found = True
-                user['allowed_ips'] = allowed_ips
+                # Create a copy of the user dict to preserve all fields
+                updated_user = user.copy()
+                updated_user['allowed_ips'] = allowed_ips
                 # Clear failed attempts when IPs are updated
-                user['failed_ip_attempts'] = {}
-                break
+                updated_user['failed_ip_attempts'] = {}
+                updated_users.append(updated_user)
+            else:
+                # Preserve all other users exactly as they are
+                updated_users.append(user)
         
         if not user_found:
             return jsonify({"status": "error", "message": "User not found"}), 404
         
-        auth_data["users"] = users
+        auth_data["users"] = updated_users
         if save_auth(auth_data):
             return jsonify({
                 "status": "success", 
