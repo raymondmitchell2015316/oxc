@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>oXCookie Manager - Web Installer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #00d4ff, #5a67d8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .installer-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .section-title {
+            font-size: 1.3em;
+            margin-bottom: 20px;
+            color: #00d4ff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 500;
+        }
+
+        input[type="text"],
+        input[type="password"],
+        input[type="number"],
+        select {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #00d4ff;
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, #00d4ff, #5a67d8);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 212, 255, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(45deg, #00ff88, #00cc6a);
+            color: #fff;
+            width: 100%;
+            margin-top: 20px;
+            font-size: 18px;
+            padding: 15px;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 255, 136, 0.4);
+        }
+
+        .btn-success:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .alert-success {
+            background: rgba(0, 255, 136, 0.2);
+            border: 1px solid rgba(0, 255, 136, 0.5);
+            color: #00ff88;
+        }
+
+        .alert-error {
+            background: rgba(255, 0, 0, 0.2);
+            border: 1px solid rgba(255, 0, 0, 0.5);
+            color: #ff6b6b;
+        }
+
+        .alert-info {
+            background: rgba(0, 212, 255, 0.2);
+            border: 1px solid rgba(0, 212, 255, 0.5);
+            color: #00d4ff;
+        }
+
+        .progress-container {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(45deg, #00d4ff, #5a67d8);
+            width: 0%;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-weight: 600;
+        }
+
+        .log-container {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin-top: 15px;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .log-entry.error {
+            color: #ff6b6b;
+        }
+
+        .log-entry.success {
+            color: #00ff88;
+        }
+
+        .two-columns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .two-columns {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .status-available {
+            background: rgba(0, 255, 136, 0.2);
+            color: #00ff88;
+        }
+
+        .status-unavailable {
+            background: rgba(255, 0, 0, 0.2);
+            color: #ff6b6b;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🍪 oXCookie Manager</h1>
+            <p>Web-Based VPS Installer</p>
+        </div>
+
+        <div id="alert" class="alert"></div>
+
+        <div class="installer-card">
+            <div class="section-title">
+                <span>📡 Step 1: VPS Connection</span>
+            </div>
+            
+            <div class="alert alert-info" style="margin-bottom: 20px;">
+                <strong>Note:</strong> This installer uses SSH key authentication. Passwords are only used to copy generated keys to the VPS.
+            </div>
+
+            <div class="form-group">
+                <label>VPS IP Address or Hostname</label>
+                <input type="text" id="vps-host" placeholder="162.245.188.249" required>
+            </div>
+
+            <div class="two-columns">
+                <div class="form-group">
+                    <label>SSH Username</label>
+                    <input type="text" id="vps-user" placeholder="root" value="root">
+                </div>
+                <div class="form-group">
+                    <label>SSH Port</label>
+                    <input type="number" id="vps-port" placeholder="22" value="22">
+                </div>
+            </div>
+
+            <div class="checkbox-group">
+                <input type="checkbox" id="use-key-auth">
+                <label for="use-key-auth">Use SSH Key Authentication</label>
+            </div>
+
+            <div id="key-auth-section" class="hidden">
+                <div class="form-group">
+                    <label>SSH Private Key Path (leave empty to generate new key)</label>
+                    <input type="text" id="ssh-key-path" placeholder="/path/to/key or leave empty">
+                </div>
+                <div id="key-generation-section" class="hidden">
+                    <div class="form-group">
+                        <label>SSH Password (to copy generated key to VPS)</label>
+                        <input type="password" id="ssh-password-for-key" placeholder="Enter password">
+                    </div>
+                    <button class="btn btn-primary" onclick="generateSSHKey()">🔑 Generate SSH Key</button>
+                    <div id="key-info" class="alert alert-info hidden" style="margin-top: 10px;"></div>
+                </div>
+            </div>
+
+            <div id="password-auth-section">
+                <div class="form-group">
+                    <label>SSH Password</label>
+                    <input type="password" id="ssh-password" placeholder="Enter password">
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-primary" onclick="testConnection()">🔌 Test Connection</button>
+                <button class="btn btn-primary" onclick="saveConfig()">💾 Save Configuration</button>
+            </div>
+        </div>
+
+        <div class="installer-card">
+            <div class="section-title">🌐 Step 2: Domain Configuration</div>
+
+            <div class="form-group">
+                <label>Domain Name</label>
+                <input type="text" id="domain" placeholder="example.com or cookies.example.com" required>
+            </div>
+
+            <div id="subdomain-section" class="hidden">
+                <div class="alert alert-info">
+                    <strong>Base Domain Detected:</strong> <span id="base-domain-display"></span><br>
+                    Would you like to create a random subdomain?
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="create-subdomain" checked>
+                    <label for="create-subdomain">Generate random subdomain</label>
+                </div>
+                <div id="generated-subdomain" class="alert alert-success hidden" style="margin-top: 10px;"></div>
+            </div>
+
+            <div class="checkbox-group">
+                <input type="checkbox" id="setup-dns">
+                <label for="setup-dns">Set up DNS automatically</label>
+            </div>
+
+            <div id="dns-section" class="hidden">
+                <div class="form-group">
+                    <label>DNS Provider</label>
+                    <select id="dns-provider">
+                        <option value="cloudflare">Cloudflare (Global API Key)</option>
+                        <option value="cloudflare-token">Cloudflare (API Token)</option>
+                        <option value="digitalocean">DigitalOcean</option>
+                        <option value="manual">Manual (skip DNS setup)</option>
+                    </select>
+                </div>
+
+                <div id="cloudflare-section">
+                    <div class="form-group">
+                        <label>Cloudflare Email</label>
+                        <input type="text" id="cf-email" placeholder="your-email@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Cloudflare Global API Key</label>
+                        <input type="password" id="cf-api-key" placeholder="Enter API key">
+                    </div>
+                </div>
+
+                <div id="cloudflare-token-section" class="hidden">
+                    <div class="form-group">
+                        <label>Cloudflare API Token</label>
+                        <input type="password" id="cf-token" placeholder="Enter API token">
+                    </div>
+                    <div class="form-group">
+                        <label>Cloudflare Zone ID</label>
+                        <input type="text" id="cf-zone-id" placeholder="Enter Zone ID">
+                    </div>
+                </div>
+
+                <div id="digitalocean-section" class="hidden">
+                    <div class="form-group">
+                        <label>DigitalOcean API Token</label>
+                        <input type="password" id="do-token" placeholder="Enter API token">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="installer-card">
+            <div class="section-title">⚙️ Step 3: Application Configuration</div>
+
+            <div class="two-columns">
+                <div class="form-group">
+                    <label>Application Port</label>
+                    <input type="number" id="app-port" value="5004">
+                </div>
+                <div class="form-group">
+                    <label>Installation Directory</label>
+                    <input type="text" id="install-dir" value="/opt/oxcookie-manager">
+                </div>
+            </div>
+        </div>
+
+        <div class="installer-card">
+            <div class="section-title">📦 Step 4: Review & Install</div>
+
+            <div id="file-check" class="alert alert-info">
+                Checking deployment files...
+            </div>
+
+            <div class="progress-container" id="progress-container">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill">0%</div>
+                </div>
+                <div id="current-step" style="text-align: center; margin-top: 10px; color: rgba(255,255,255,0.8);"></div>
+                <div class="log-container" id="log-container"></div>
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-primary" onclick="saveConfig()" style="flex: 1;">💾 Save Configuration</button>
+                <button class="btn btn-success" id="install-btn" onclick="startInstallation()" disabled style="flex: 2;">
+                    🚀 Start Installation
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let sshpassAvailable = false;
+        let generatedKeyPath = null;
+        let currentDomain = '';
+        let currentSubdomain = null;
+        let currentBaseDomain = '';
+
+        // Load saved config on load
+        window.addEventListener('DOMContentLoaded', () => {
+            loadSavedConfig();
+            checkFiles();
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            document.getElementById('use-key-auth').addEventListener('change', (e) => {
+                const useKey = e.target.checked;
+                document.getElementById('key-auth-section').classList.toggle('hidden', !useKey);
+                document.getElementById('password-auth-section').classList.toggle('hidden', useKey);
+                
+                if (useKey) {
+                    const keyPath = document.getElementById('ssh-key-path').value;
+                    if (!keyPath) {
+                        document.getElementById('key-generation-section').classList.remove('hidden');
+                    }
+                }
+            });
+
+            document.getElementById('ssh-key-path').addEventListener('input', (e) => {
+                const hasPath = e.target.value.trim() !== '';
+                document.getElementById('key-generation-section').classList.toggle('hidden', hasPath);
+            });
+
+            document.getElementById('setup-dns').addEventListener('change', (e) => {
+                document.getElementById('dns-section').classList.toggle('hidden', !e.target.checked);
+            });
+
+            document.getElementById('dns-provider').addEventListener('change', (e) => {
+                const provider = e.target.value;
+                document.getElementById('cloudflare-section').classList.toggle('hidden', provider !== 'cloudflare');
+                document.getElementById('cloudflare-token-section').classList.toggle('hidden', provider !== 'cloudflare-token');
+                document.getElementById('digitalocean-section').classList.toggle('hidden', provider !== 'digitalocean');
+            });
+
+            document.getElementById('domain').addEventListener('blur', (e) => {
+                checkDomain(e.target.value);
+            });
+
+            document.getElementById('create-subdomain').addEventListener('change', (e) => {
+                if (e.target.checked && currentBaseDomain) {
+                    generateSubdomain();
+                }
+            });
+        }
+
+        async function loadSavedConfig() {
+            try {
+                const response = await fetch('/api/load-config');
+                const data = await response.json();
+                
+                if (data.status === 'success' && data.config) {
+                    const config = data.config;
+                    if (config.vps_host) document.getElementById('vps-host').value = config.vps_host;
+                    if (config.vps_user) document.getElementById('vps-user').value = config.vps_user;
+                    if (config.vps_port) document.getElementById('vps-port').value = config.vps_port;
+                    if (config.use_key) {
+                        document.getElementById('use-key-auth').checked = true;
+                        document.getElementById('key-auth-section').classList.remove('hidden');
+                        document.getElementById('password-auth-section').classList.add('hidden');
+                        if (config.key_path) document.getElementById('ssh-key-path').value = config.key_path;
+                    }
+                    if (config.domain) document.getElementById('domain').value = config.domain;
+                    if (config.app_port) document.getElementById('app-port').value = config.app_port;
+                    if (config.install_dir) document.getElementById('install-dir').value = config.install_dir;
+                    
+                    showAlert('Saved configuration loaded', 'success');
+                }
+            } catch (error) {
+                console.error('Error loading config:', error);
+            }
+        }
+
+        async function saveConfig() {
+            const config = {
+                host: document.getElementById('vps-host').value,
+                user: document.getElementById('vps-user').value || 'root',
+                port: parseInt(document.getElementById('vps-port').value) || 22,
+                use_key: document.getElementById('use-key-auth').checked,
+                key_path: document.getElementById('ssh-key-path').value || generatedKeyPath,
+                password: document.getElementById('use-key-auth').checked ? 
+                         document.getElementById('ssh-password-for-key').value : 
+                         document.getElementById('ssh-password').value,
+                domain: document.getElementById('domain').value,
+                base_domain: currentBaseDomain,
+                subdomain: currentSubdomain,
+                app_port: parseInt(document.getElementById('app-port').value) || 5004,
+                install_dir: document.getElementById('install-dir').value || '/opt/oxcookie-manager',
+                setup_dns: document.getElementById('setup-dns').checked,
+                dns_provider: document.getElementById('dns-provider').value,
+                cf_email: document.getElementById('cf-email').value,
+                cf_api_key: document.getElementById('cf-api-key').value,
+                cf_token: document.getElementById('cf-token').value,
+                cf_zone_id: document.getElementById('cf-zone-id').value,
+                do_token: document.getElementById('do-token').value
+            };
+
+            try {
+                const response = await fetch('/api/save-config', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(config)
+                });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    showAlert('Configuration saved!', 'success');
+                } else {
+                    showAlert('Failed to save: ' + data.message, 'error');
+                }
+            } catch (error) {
+                showAlert('Error saving config: ' + error.message, 'error');
+            }
+        }
+
+        async function generateSSHKey() {
+            try {
+                const keyName = 'oxcookie_vps_key';
+                const host = document.getElementById('vps-host').value;
+                const user = document.getElementById('vps-user').value || 'root';
+                const port = parseInt(document.getElementById('vps-port').value) || 22;
+                const password = document.getElementById('ssh-password-for-key').value;
+                
+                if (!host) {
+                    showAlert('Please enter VPS host first', 'error');
+                    return;
+                }
+                
+                if (!password) {
+                    showAlert('Please enter SSH password to copy the key to VPS', 'error');
+                    return;
+                }
+                
+                showAlert('Generating SSH key pair and copying to VPS...', 'info');
+                
+                const response = await fetch('/api/generate-ssh-key', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        key_name: keyName,
+                        host: host,
+                        user: user,
+                        port: port,
+                        password: password
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success' || data.status === 'partial_success') {
+                    generatedKeyPath = data.private_key_path;
+                    document.getElementById('ssh-key-path').value = data.private_key_path;
+                    document.getElementById('key-info').innerHTML = 
+                        `<strong>Key Generated!</strong><br>Private: ${data.private_key_path}<br>Public: ${data.public_key_path}<br><br>${data.message || 'Key ready'}`;
+                    document.getElementById('key-info').classList.remove('hidden');
+                    
+                    if (data.status === 'success') {
+                        showAlert('SSH key generated and copied to VPS successfully! Password saved.', 'success');
+                        // Clear password field for security
+                        document.getElementById('ssh-password-for-key').value = '';
+                    } else {
+                        showAlert('Key generated and password saved, but auto-copy failed. ' + (data.copy_instructions || ''), 'error');
+                    }
+                } else {
+                    showAlert('Failed to generate key: ' + data.message, 'error');
+                }
+            } catch (error) {
+                showAlert('Error generating key: ' + error.message, 'error');
+            }
+        }
+
+        async function testConnection() {
+            const host = document.getElementById('vps-host').value;
+            const user = document.getElementById('vps-user').value || 'root';
+            const port = document.getElementById('vps-port').value || '22';
+            const useKey = document.getElementById('use-key-auth').checked;
+            const keyPath = document.getElementById('ssh-key-path').value || generatedKeyPath;
+
+            if (!host) {
+                showAlert('Please enter VPS host', 'error');
+                return;
+            }
+
+            if (useKey && !keyPath) {
+                showAlert('Please provide SSH key path or generate a new key', 'error');
+                return;
+            }
+
+            try {
+                showAlert('Testing connection...', 'info');
+                const response = await fetch('/api/test-connection', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        host, user, port,
+                        use_key: useKey,
+                        key_path: keyPath
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    showAlert('✓ Connection successful!', 'success');
+                } else {
+                    let errorMsg = '✗ Connection failed: ' + data.message;
+                    if (data.needs_key_copy && data.has_password) {
+                        // Try to copy key automatically
+                        showAlert('Key not found on VPS. Attempting to copy using saved password...', 'info');
+                        try {
+                            const copyResponse = await fetch('/api/copy-ssh-key', {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({host, user, port, key_path: keyPath})
+                            });
+                            const copyData = await copyResponse.json();
+                            if (copyData.status === 'success') {
+                                showAlert('✓ Key copied successfully! Testing connection again...', 'success');
+                                // Test again
+                                const retryResponse = await fetch('/api/test-connection', {
+                                    method: 'POST',
+                                    headers: {'Content-Type': 'application/json'},
+                                    body: JSON.stringify({
+                                        host, user, port,
+                                        use_key: useKey,
+                                        key_path: keyPath
+                                    })
+                                });
+                                const retryData = await retryResponse.json();
+                                if (retryData.status === 'success') {
+                                    showAlert('✓ Connection successful!', 'success');
+                                } else {
+                                    showAlert('✗ Connection still failed: ' + retryData.message, 'error');
+                                }
+                            } else {
+                                showAlert('✗ Failed to copy key: ' + copyData.message, 'error');
+                            }
+                        } catch (copyError) {
+                            showAlert('✗ Failed to copy key: ' + copyError.message, 'error');
+                        }
+                    } else if (data.needs_key_copy) {
+                        errorMsg += ' Please copy the SSH key to the VPS first.';
+                        showAlert(errorMsg, 'error');
+                    } else {
+                        showAlert(errorMsg, 'error');
+                    }
+                }
+            } catch (error) {
+                showAlert('Error testing connection: ' + error.message, 'error');
+            }
+        }
+
+        async function checkDomain(domain) {
+            if (!domain) return;
+            
+            currentDomain = domain;
+            
+            try {
+                const response = await fetch('/api/check-domain', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({domain})
+                });
+
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    if (!data.is_subdomain) {
+                        currentBaseDomain = data.base_domain;
+                        document.getElementById('base-domain-display').textContent = currentBaseDomain;
+                        document.getElementById('subdomain-section').classList.remove('hidden');
+                        
+                        if (document.getElementById('create-subdomain').checked) {
+                            generateSubdomain();
+                        }
+                    } else {
+                        document.getElementById('subdomain-section').classList.add('hidden');
+                        currentSubdomain = data.subdomain;
+                        currentBaseDomain = data.base_domain;
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking domain:', error);
+            }
+        }
+
+        async function generateSubdomain() {
+            if (!currentBaseDomain) return;
+            
+            try {
+                const response = await fetch('/api/generate-subdomain', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({base_domain: currentBaseDomain})
+                });
+
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    currentSubdomain = data.subdomain;
+                    currentDomain = data.full_domain;
+                    document.getElementById('domain').value = data.full_domain;
+                    document.getElementById('generated-subdomain').innerHTML = 
+                        `<strong>Generated Subdomain:</strong> ${data.full_domain}`;
+                    document.getElementById('generated-subdomain').classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Error generating subdomain:', error);
+            }
+        }
+
+        async function checkFiles() {
+            try {
+                const response = await fetch('/api/files');
+                const data = await response.json();
+                
+                let missing = [];
+                data.files.forEach(file => {
+                    if (!file.exists && file.name !== 'templates/') {
+                        missing.push(file.name);
+                    }
+                });
+
+                const fileCheckEl = document.getElementById('file-check');
+                if (missing.length === 0) {
+                    fileCheckEl.innerHTML = '✓ All deployment files found';
+                    fileCheckEl.className = 'alert alert-success';
+                    document.getElementById('install-btn').disabled = false;
+                } else {
+                    fileCheckEl.innerHTML = `✗ Missing files: ${missing.join(', ')}`;
+                    fileCheckEl.className = 'alert alert-error';
+                }
+            } catch (error) {
+                console.error('Error checking files:', error);
+            }
+        }
+
+        async function startInstallation() {
+            // Collect all configuration
+            const config = {
+                host: document.getElementById('vps-host').value,
+                user: document.getElementById('vps-user').value || 'root',
+                port: parseInt(document.getElementById('vps-port').value) || 22,
+                use_key: document.getElementById('use-key-auth').checked,
+                key_path: document.getElementById('ssh-key-path').value || generatedKeyPath,
+                password: document.getElementById('use-key-auth').checked ? 
+                         document.getElementById('ssh-password-for-key').value : 
+                         document.getElementById('ssh-password').value,
+                domain: document.getElementById('domain').value,
+                base_domain: currentBaseDomain,
+                subdomain: currentSubdomain,
+                app_port: parseInt(document.getElementById('app-port').value) || 5004,
+                install_dir: document.getElementById('install-dir').value || '/opt/oxcookie-manager',
+                setup_dns: document.getElementById('setup-dns').checked,
+                dns_provider: document.getElementById('dns-provider').value,
+                cf_email: document.getElementById('cf-email').value,
+                cf_api_key: document.getElementById('cf-api-key').value,
+                cf_token: document.getElementById('cf-token').value,
+                cf_zone_id: document.getElementById('cf-zone-id').value,
+                do_token: document.getElementById('do-token').value
+            };
+
+            // Validate
+            if (!config.host) {
+                showAlert('Please enter VPS host', 'error');
+                return;
+            }
+
+            if (!config.domain) {
+                showAlert('Please enter domain name', 'error');
+                return;
+            }
+
+            if (config.use_key && !config.key_path) {
+                showAlert('Please provide SSH key or generate one', 'error');
+                return;
+            }
+
+            if (!config.use_key && !config.password) {
+                showAlert('Please enter SSH password', 'error');
+                return;
+            }
+
+            // Start installation
+            document.getElementById('install-btn').disabled = true;
+            document.getElementById('progress-container').style.display = 'block';
+            
+            try {
+                const response = await fetch('/api/install', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(config)
+                });
+
+                const data = await response.json();
+                
+                if (data.status === 'started') {
+                    showAlert('Installation started!', 'success');
+                    pollStatus();
+                } else {
+                    showAlert('Failed to start installation: ' + data.message, 'error');
+                    document.getElementById('install-btn').disabled = false;
+                }
+            } catch (error) {
+                showAlert('Error starting installation: ' + error.message, 'error');
+                document.getElementById('install-btn').disabled = false;
+            }
+        }
+
+        async function pollStatus() {
+            const interval = setInterval(async () => {
+                try {
+                    const response = await fetch('/api/status');
+                    const data = await response.json();
+
+                    document.getElementById('progress-fill').style.width = data.progress + '%';
+                    document.getElementById('progress-fill').textContent = data.progress + '%';
+                    document.getElementById('current-step').textContent = data.current_step;
+
+                    const logContainer = document.getElementById('log-container');
+                    logContainer.innerHTML = '';
+                    data.log.forEach(log => {
+                        const entry = document.createElement('div');
+                        entry.className = 'log-entry';
+                        if (log.includes('ERROR') || log.includes('Failed')) {
+                            entry.className += ' error';
+                        } else if (log.includes('OK') || log.includes('Completed')) {
+                            entry.className += ' success';
+                        }
+                        entry.textContent = log;
+                        logContainer.appendChild(entry);
+                    });
+                    logContainer.scrollTop = logContainer.scrollHeight;
+
+                    if (data.status === 'completed') {
+                        clearInterval(interval);
+                        showAlert('Installation completed successfully!', 'success');
+                        document.getElementById('install-btn').disabled = false;
+                    } else if (data.status === 'error') {
+                        clearInterval(interval);
+                        showAlert('Installation failed: ' + data.error, 'error');
+                        document.getElementById('install-btn').disabled = false;
+                    }
+                } catch (error) {
+                    console.error('Error polling status:', error);
+                }
+            }, 1000);
+        }
+
+        function showAlert(message, type, onClick = null) {
+            const alertEl = document.getElementById('alert');
+            alertEl.textContent = message;
+            alertEl.className = `alert alert-${type}`;
+            alertEl.style.display = 'block';
+            
+            if (onClick) {
+                alertEl.style.cursor = 'pointer';
+                alertEl.onclick = onClick;
+            } else {
+                alertEl.style.cursor = 'default';
+                alertEl.onclick = null;
+            }
+
+            if (type !== 'error') {
+                setTimeout(() => {
+                    alertEl.style.display = 'none';
+                }, 5000);
+            }
+        }
+    </script>
+</body>
+</html>
+

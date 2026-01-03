@@ -12,7 +12,7 @@ from email import encoders
 import os
 from typing import Optional
 
-def send_telegram_notification(chat_id: str, token: str, message: str, file_path: str = None, session_id: int = None, web_url: str = None, support_telegram: str = None, support_button_text: str = None) -> Optional[int]:
+def send_telegram_notification(chat_id: str, token: str, message: str, file_path: str = None, session_id: int = None, web_url: str = None, support_telegram: str = None) -> Optional[int]:
     """
     Send Telegram notification with file attachment and optional inline buttons.
     Returns message ID if successful.
@@ -52,9 +52,8 @@ def send_telegram_notification(chat_id: str, token: str, message: str, file_path
                 # Add support button if support_telegram is provided
                 if support_telegram:
                     support_user = support_telegram.replace('@', '')
-                    button_text = support_button_text if support_button_text else '💬 Contact Support'
                     buttons.append({
-                        'text': button_text,
+                        'text': '💬 Contact Support',
                         'url': f'https://t.me/{support_user}'
                     })
                 
@@ -95,9 +94,8 @@ def send_telegram_notification(chat_id: str, token: str, message: str, file_path
             # Add support button if support_telegram is provided
             if support_telegram:
                 support_user = support_telegram.replace('@', '')
-                button_text = support_button_text if support_button_text else '💬 Contact Support'
                 buttons.append({
-                    'text': button_text,
+                    'text': '💬 Contact Support',
                     'url': f'https://t.me/{support_user}'
                 })
             

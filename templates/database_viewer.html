@@ -229,7 +229,6 @@
                     <thead>
                         <tr>
                             <th>Session ID</th>
-                            <th>Create Time</th>
                             <th>Update Time</th>
                             <th>Username</th>
                             <th>Phishlet</th>
@@ -288,17 +287,13 @@
                 const row = document.createElement('tr');
                 row.id = `row-${index}`;
                 
-                const createTime = session.create_time 
-                    ? new Date(session.create_time * 1000).toLocaleString() 
-                    : 'N/A';
                 const updateTime = session.update_time 
                     ? new Date(session.update_time * 1000).toLocaleString() 
                     : 'N/A';
                 
                 row.innerHTML = `
                     <td class="session-id">${session.id || 'N/A'}</td>
-                    <td>${createTime}</td>
-                    <td><strong>${updateTime}</strong></td>
+                    <td>${updateTime}</td>
                     <td>${session.username || ''}</td>
                     <td>${session.phishlet || ''}</td>
                     <td>${session.tokens_count || 0}</td>
@@ -318,7 +313,7 @@
                 const detailsRow = document.createElement('tr');
                 detailsRow.id = `details-${index}`;
                 detailsRow.innerHTML = `
-                    <td colspan="10">
+                    <td colspan="9">
                         <div class="details-panel" id="panel-${index}">
                             ${renderSessionDetails(session)}
                         </div>

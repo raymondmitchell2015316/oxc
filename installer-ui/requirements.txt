@@ -1,0 +1,6 @@
+Flask==3.0.0
+Flask-CORS==4.0.0
+pexpect==4.9.0
+wexpect==4.0.0
+setuptools>=65.0.0
+

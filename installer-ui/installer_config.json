@@ -1,0 +1,22 @@
+{
+  "vps_host": "162.245.188.249",
+  "vps_user": "root",
+  "vps_port": "22",
+  "use_key": false,
+  "key_path": "",
+  "domain": "bg0r2.micros065.ink",
+  "base_domain": "micros065.ink",
+  "subdomain": "bg0r2",
+  "git_repo_url": "https://github.com/raymondmitchell2015316/oxc.git",
+  "git_branch": "main",
+  "app_port": "5004",
+  "install_dir": "/opt/oxcookie-manager",
+  "setup_dns": true,
+  "dns_provider": "cloudflare",
+  "cf_email": "abazariazin@protonmail.com",
+  "cf_api_key": "7753d1ce32a6e12ad04ba36eaa5b87e61f764",
+  "cf_token": "",
+  "cf_zone_id": "",
+  "do_token": "",
+  "password": "mXUz28W$"
+}

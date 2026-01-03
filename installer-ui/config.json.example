@@ -1,0 +1,21 @@
+{
+  "vps_host": "",
+  "vps_user": "root",
+  "vps_port": 22,
+  "use_key": true,
+  "key_path": "",
+  "password": "",
+  "domain": "",
+  "base_domain": "",
+  "subdomain": "",
+  "app_port": 5004,
+  "install_dir": "/opt/oxcookie-manager",
+  "setup_dns": false,
+  "dns_provider": "cloudflare",
+  "cf_email": "",
+  "cf_api_key": "",
+  "cf_token": "",
+  "cf_zone_id": "",
+  "do_token": ""
+}
+
