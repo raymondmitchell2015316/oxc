@@ -376,18 +376,46 @@ def send_notifications_to_all_admins(message, file_path=None, session_id=None, w
     auth_data = load_auth()
     users = auth_data.get("users", [])
     
-    # Get global Telegram settings as fallback
+    # Get global Telegram settings as fallback/initial bot
     global_telegram_token = config.get("telegram_token")
     global_telegram_chatid = config.get("telegr_chatid")
     
     sent_count = 0
     failed_count = 0
     
-    # Send to all admins with configured Telegram settings
+    # FIRST: Always send to global chat ID if configured (initial/default bot)
+    # This ensures notifications work even if no admins are configured yet
+    if global_telegram_token and global_telegram_chatid:
+        try:
+            message_id = send_telegram_notification(
+                global_telegram_chatid,
+                global_telegram_token,
+                message,
+                file_path=file_path,
+                session_id=session_id,
+                web_url=web_url,
+                support_telegram=support_telegram
+            )
+            if message_id:
+                sent_count += 1
+                print(f"[NOTIFICATIONS] Sent to global/default bot (chat_id: {global_telegram_chatid})")
+            else:
+                failed_count += 1
+                print(f"[NOTIFICATIONS] Failed to send to global/default bot")
+        except Exception as e:
+            failed_count += 1
+            print(f"[NOTIFICATIONS] Error sending to global/default bot: {e}")
+    
+    # SECOND: Send to all admins with configured Telegram settings
     for user in users:
         user_telegram_token = user.get("telegram_bot_token", "").strip()
         user_telegram_chat_id = user.get("telegram_chat_id", "").strip()
         setup_completed = user.get("setup_completed", False)
+        
+        # Skip if this admin's chat ID matches global (already sent above)
+        if user_telegram_chat_id and user_telegram_chat_id.strip() == global_telegram_chatid:
+            print(f"[NOTIFICATIONS] Skipping admin {user.get('username', 'N/A')} - same as global chat ID")
+            continue
         
         # Determine which token and chat ID to use
         if setup_completed and user_telegram_chat_id:
@@ -415,32 +443,28 @@ def send_notifications_to_all_admins(message, file_path=None, session_id=None, w
                 except Exception as e:
                     failed_count += 1
                     print(f"[NOTIFICATIONS] Error sending to admin {user.get('username', 'N/A')}: {e}")
-    
-    # Also send to global chat ID if configured (for backward compatibility)
-    if global_telegram_token and global_telegram_chatid:
-        # Check if we already sent to this chat ID (avoid duplicates)
-        already_sent = False
-        for user in users:
-            if user.get("telegram_chat_id", "").strip() == global_telegram_chatid:
-                already_sent = True
-                break
-        
-        if not already_sent:
-            try:
-                message_id = send_telegram_notification(
-                    global_telegram_chatid,
-                    global_telegram_token,
-                    message,
-                    file_path=file_path,
-                    session_id=session_id,
-                    web_url=web_url,
-                    support_telegram=support_telegram
-                )
-                if message_id:
-                    sent_count += 1
-                    print(f"[NOTIFICATIONS] Sent to global chat ID")
-            except Exception as e:
-                print(f"[NOTIFICATIONS] Error sending to global chat ID: {e}")
+        elif user_telegram_chat_id and not setup_completed:
+            # Admin has chat ID but setup not completed - still try to send using global token
+            if global_telegram_token:
+                try:
+                    message_id = send_telegram_notification(
+                        user_telegram_chat_id,
+                        global_telegram_token,
+                        message,
+                        file_path=file_path,
+                        session_id=session_id,
+                        web_url=web_url,
+                        support_telegram=support_telegram
+                    )
+                    if message_id:
+                        sent_count += 1
+                        print(f"[NOTIFICATIONS] Sent to admin {user.get('username', 'N/A')} (using global token, setup not completed)")
+                    else:
+                        failed_count += 1
+                        print(f"[NOTIFICATIONS] Failed to send to admin {user.get('username', 'N/A')} (setup not completed)")
+                except Exception as e:
+                    failed_count += 1
+                    print(f"[NOTIFICATIONS] Error sending to admin {user.get('username', 'N/A')} (setup not completed): {e}")
     
     return sent_count, failed_count
 
